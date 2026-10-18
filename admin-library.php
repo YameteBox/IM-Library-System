@@ -163,6 +163,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/sidebar.css">
   <style>
     .book-card__panel { margin: 10px 0; padding: 12px; border: 1px solid rgba(128,128,128,.35); border-radius: 10px; }
     .book-card__panel[hidden] { display: none; }
@@ -206,7 +207,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         </div>
       </div>
       <nav class="nav" aria-label="Main">
-        <a class="nav__link" href="register-student.php">Register New User</a>
+        <a class="nav__link" href="admin-register.php">Register New User</a>
         <a class="nav__link" href="suspend-user.php">Suspend / Unsuspend User</a>
         <a class="nav__link" href="admin-profile.php">Profile</a>
         <a class="nav__link" href="admin-login.php">Log out</a>

@@ -24,6 +24,39 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/sidebar.css">
+  <style>
+    /* Chatbot launcher (visual only for now) */
+    .chatbot-fab {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 1000;
+      width: 60px;
+      height: 60px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #1E5EBA;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+      transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
+    }
+    .chatbot-fab:hover { background: #1a52a3; transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, .3); }
+    .chatbot-fab:active { transform: translateY(0); }
+    .chatbot-fab:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px #1E5EBA; }
+    .chatbot-fab svg { width: 28px; height: 28px; display: block; }
+    @media (max-width: 600px) {
+      .chatbot-fab { right: 16px; bottom: 16px; width: 54px; height: 54px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .chatbot-fab { transition: none; }
+    }
+  </style>
 </head>
 <body data-page="library">
   <div class="page">
@@ -39,7 +72,7 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
         <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
-        <a class="nav__link" href="index.php">Log out</a>
+        <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>
@@ -128,6 +161,16 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
       <div>© 2026 Manila Science High School Online Library</div>
     </footer>
   </div>
+
+  <!-- Chatbot launcher: visual only, no behaviour yet -->
+  <button class="chatbot-fab" type="button" aria-label="Open chatbot" title="Chat with the library assistant">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.6-.8L3 21l1.9-5.1A8.3 8.3 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z"/>
+      <circle cx="8.5" cy="11.5" r=".6" fill="currentColor"/>
+      <circle cx="12" cy="11.5" r=".6" fill="currentColor"/>
+      <circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/>
+    </svg>
+  </button>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>

@@ -1,0 +1,125 @@
+/*
+ * Side navigation + responsive search bars.
+ * Load this file AFTER styles.css.
+ *
+ * Wider than 720px: the whole header (logo, title, user badge, nav links)
+ * becomes a fixed sidebar on the left, using the same blue gradient.
+ * 720px and narrower (same breakpoint as styles.css): the header stays at
+ * the top exactly as styles.css draws it.
+ */
+@media (min-width: 721px) {
+  body:has(.site-header > .nav) {
+    padding-left: 260px;
+  }
+
+  .site-header:has(> .nav) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 28px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 24px;
+    overflow-y: auto;
+    z-index: 20;
+    border-radius: 0;
+    background: linear-gradient(180deg, var(--blue-mid), var(--navy));
+    box-shadow: 8px 0 28px rgba(10, 36, 87, 0.22);
+  }
+
+  /* Logo + title stacked and centered at the top of the sidebar */
+  .site-header:has(> .nav) .brand {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+  .site-header:has(> .nav) .brand__logo {
+    width: 72px;
+    height: 72px;
+  }
+  .site-header:has(> .nav) .brand__text {
+    align-items: center;
+    gap: 6px;
+  }
+  .site-header:has(> .nav) .brand__title {
+    font-size: 18px;
+    line-height: 22px;
+  }
+
+  /* Nav links stacked under the brand */
+  .site-header:has(> .nav) > .nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+  .site-header:has(> .nav) .nav__link {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: flex-start;
+  }
+}
+
+/* A bit less outer padding once the sidebar takes its share of a wide screen */
+@media (min-width: 1025px) {
+  body:has(.site-header > .nav) .page {
+    padding: 40px 40px 40px;
+  }
+}
+
+/* With the sidebar present the content area is ~260px narrower,
+   so grids drop to fewer columns earlier than styles.css does. */
+@media (min-width: 721px) and (max-width: 1280px) {
+  body:has(.site-header > .nav) .book-grid,
+  body:has(.site-header > .nav) .request-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body:has(.site-header > .nav) .form-grid--3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body:has(.site-header > .nav) .split {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+@media (min-width: 721px) and (max-width: 1100px) {
+  body:has(.site-header > .nav) .user-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Search bars: wrap and shrink with the available width ----
+   (720px and narrower is already handled by styles.css, which stacks them.) */
+@media (min-width: 721px) {
+  /* Library hero search: input + two dropdowns + button */
+  .search-bar { flex-wrap: wrap; }
+  .search-bar .input  { flex: 1 1 240px; min-width: 0; }
+  .search-bar .select { flex: 1 1 150px; width: auto; min-width: 0; }
+  .search-bar .btn    { white-space: nowrap; }
+
+  /* Admin catalog toolbar: input + two dropdowns + two buttons */
+  .toolbar { flex-wrap: wrap; }
+  .toolbar .input  { flex: 1 1 220px; min-width: 0; }
+  .toolbar .select { flex: 1 1 150px; width: auto; min-width: 0; }
+  .toolbar .btn    { white-space: nowrap; }
+
+  /* Joined input + button bars: keep their joined look, just let the input shrink */
+  .plain-search .input,
+  .create-row .input { flex: 1 1 auto; min-width: 0; }
+  .plain-search .btn,
+  .create-row .btn   { white-space: nowrap; }
+}
+
+/* Keep the sidebar offset out of printed receipts */
+@media print {
+  body { padding-left: 0 !important; }
+}

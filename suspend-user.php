@@ -17,6 +17,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/sidebar.css">
 </head>
 <body data-page="suspend-user">
   <div class="page">
@@ -43,7 +44,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
             <form class="form-stack" id="suspend-form" onsubmit="return false" novalidate>
               <div class="field">
           <label for="f-student">Student Number</label>
-          <input class="input" id="f-student" name="student" type="text" placeholder="2023-00789" >
+          <input class="input" id="f-student" name="student" type="text" placeholder="202300789" >
         </div>
               <div class="field">
           <label for="f-admin">Admin ID</label>
@@ -63,7 +64,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
           </div>
           <aside class="split__side" aria-label="Find a user">
             <form class="split__search plain-search" id="profile-search" role="search" method="get" action="suspend-user.php" data-server-search>
-              <input class="input" name="q" type="search" value="<?= h($q) ?>" placeholder="Search users by student number, username, or email..." aria-label="Search users">
+              <input class="input" name="q" type="search" value="<?= h($q) ?>" placeholder="Search by student number, username, or email..." aria-label="Search users">
               <button class="btn" type="submit">Search</button>
             </form>
             <div class="split__results">

@@ -12,6 +12,7 @@ require 'db.php';
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/sidebar.css">
 </head>
 <body data-page="profile">
   <div class="page">
@@ -26,7 +27,7 @@ require 'db.php';
       <nav class="nav" aria-label="Main">
         <a class="nav__link" href="library.php">← Back to library</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
-        <a class="nav__link" href="index.php">Log out</a>
+        <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>

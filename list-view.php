@@ -30,6 +30,7 @@ function listCover(string $title, array $covers): string
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/sidebar.css">
 </head>
 <body data-page="list-view">
   <div class="page page--narrow-gap">
@@ -45,7 +46,7 @@ function listCover(string $title, array $covers): string
         <a class="nav__link" href="my-lists.php">← My Lists</a>
         <a class="nav__link" href="library.php">Library</a>
         <a class="nav__link" href="profile.php">Profile</a>
-        <a class="nav__link" href="index.php">Log out</a>
+        <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>

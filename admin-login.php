@@ -41,7 +41,7 @@ require 'db.php';
         </div>
             <button class="btn btn--block btn--round" type="submit">Log In</button>
           </form>
-          <p class="link-row">Are you a user? <a href="index.php">Log in</a></p>
+          <p class="link-row">Are you a user? <a href="login.php">Log in</a></p>
         </section>
       </main>
     </div>

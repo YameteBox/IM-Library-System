@@ -32,7 +32,7 @@ require 'db.php';
           <div><span class="pill pill--blue">student</span></div>
           <div class="btn-row">
             <a class="btn btn--round" href="library.php">Browse the library</a>
-            <a class="btn btn--round btn--danger" href="index.php">Log out</a>
+            <a class="btn btn--round btn--danger" href="login.php">Log out</a>
           </div>
         </section>
       </main>

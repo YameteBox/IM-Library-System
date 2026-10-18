@@ -17,6 +17,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/sidebar.css">
 </head>
 <body data-page="search-profiles">
   <div class="page page--narrow-gap">
@@ -32,7 +33,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
         <a class="nav__link" href="library.php">← Back to library</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
-        <a class="nav__link" href="index.php">Log out</a>
+        <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
     <form class="plain-search" id="profile-search" role="search" method="get" action="search-profiles.php" data-server-search>
