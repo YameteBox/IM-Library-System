@@ -200,3 +200,106 @@ function renderUserCard(array $u, array $borrowed, bool $withActions): string
 <?php
     return ob_get_clean();
 }
+
+
+// ---------------------------------------------------------------------------
+// Cover images
+// ---------------------------------------------------------------------------
+
+const COVER_UPLOAD_DIR = 'uploads/covers';
+const COVER_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB
+
+/** Adds books.cover_image the first time it is needed (see add_cover_image.sql). */
+function ensureCoverColumn(PDO $pdo): void
+{
+    $exists = $pdo->query(
+        "SELECT 1 FROM information_schema.columns
+         WHERE table_schema = current_schema() AND table_name = 'books' AND column_name = 'cover_image'"
+    )->fetchColumn();
+
+    if (!$exists) {
+        $pdo->exec('ALTER TABLE books ADD COLUMN cover_image TEXT');
+    }
+}
+
+/**
+ * Handle a cover submitted either as an uploaded file ($_FILES[$fileField])
+ * or as an image URL. An uploaded file wins over the URL.
+ *
+ * Returns [stored path or URL | null, error message | null].
+ * [null, null] means no new cover was provided.
+ */
+function saveCoverImage(string $fileField, string $urlValue): array
+{
+    $file = $_FILES[$fileField] ?? null;
+
+    if ($file && ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+        if (in_array($file['error'], [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            return [null, 'That image is too large. The limit is 2 MB.'];
+        }
+        if ($file['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
+            return [null, 'The image could not be uploaded. Please try again.'];
+        }
+        if ($file['size'] > COVER_MAX_BYTES) {
+            return [null, 'That image is too large. The limit is 2 MB.'];
+        }
+
+        // Check the real file contents, not just the extension the browser reports
+        $info    = @getimagesize($file['tmp_name']);
+        $allowed = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png'];
+        if (!$info || !isset($allowed[$info[2]])) {
+            return [null, 'Cover images must be .jpg or .png files.'];
+        }
+
+        $dir = __DIR__ . '/' . COVER_UPLOAD_DIR;
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            return [null, 'The cover folder could not be created. Check the folder permissions.'];
+        }
+
+        $name = bin2hex(random_bytes(10)) . '.' . $allowed[$info[2]];
+        if (!move_uploaded_file($file['tmp_name'], $dir . '/' . $name)) {
+            return [null, 'The image could not be saved. Check the folder permissions.'];
+        }
+
+        return [COVER_UPLOAD_DIR . '/' . $name, null];
+    }
+
+    $url = trim($urlValue);
+    if ($url !== '') {
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (strlen($url) > 2000 || !filter_var($url, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) {
+            return [null, 'Please enter a valid image URL starting with http:// or https://.'];
+        }
+        return [$url, null];
+    }
+
+    return [null, null];
+}
+
+/** Delete a cover we stored ourselves. URLs and anything else are left alone. */
+function deleteLocalCover(?string $path): void
+{
+    if ($path && preg_match('#^' . preg_quote(COVER_UPLOAD_DIR, '#') . '/[a-f0-9]{20}\.(jpg|png)$#', $path)) {
+        $full = __DIR__ . '/' . $path;
+        if (is_file($full)) {
+            @unlink($full);
+        }
+    }
+}
+
+/** True when the stored cover is an external URL rather than one of our uploads. */
+function coverIsUrl(?string $cover): bool
+{
+    return $cover !== null && preg_match('#^https?://#i', $cover) === 1;
+}
+
+/** ` style="background-image:..."` for a .book-card__cover, or '' when there is no cover. */
+function coverStyleAttr($cover): string
+{
+    $cover = trim((string) $cover);
+    if ($cover === '') {
+        return '';
+    }
+    $safe = str_replace(["\\", "'", '"', '(', ')', ' ', "\n", "\r"], ['%5C', '%27', '%22', '%28', '%29', '%20', '', ''], $cover);
+    return ' style="background-image:url(\'' . h($safe) . '\')"';
+}

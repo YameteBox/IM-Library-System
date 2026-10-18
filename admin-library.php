@@ -3,6 +3,7 @@ session_start();
 require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
+ensureCoverColumn($pdo);
 
 /** Valid = a real calendar date strictly before today (matches the date picker's max). */
 function isValidPastDate(string $date): bool
@@ -58,91 +59,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flashMessage = 'Enter a number of copies greater than zero.';
             $flashType    = 'error';
         } else {
-            $pdo->prepare(
-                'UPDATE books SET copies_available = copies_available + ? WHERE id = ?'
-            )->execute([$addCopies, $bookId]);
+            $currentCover = $existing['cover_image'] ?? null;
+            [$newCover, $coverError] = saveCoverImage('cover_file', (string) ($_POST['cover_url'] ?? ''));
 
-            $flashMessage = 'Added ' . $addCopies . ' cop' . ($addCopies === 1 ? 'y' : 'ies')
-                . ' of "' . $book['title'] . '".';
-            $flashType    = 'success';
-        }
+            if ($coverError !== null) {
+                $flashMessage = $coverError;
+                $flashType    = 'error';
+            } else {
+                // Keep the current cover unless a new one was given or removal was ticked
+                $coverImage = $currentCover;
+                if ($newCover !== null) {
+                    $coverImage = $newCover;
+                } elseif (isset($_POST['remove_cover'])) {
+                    $coverImage = null;
+                }
 
-    } elseif ($action === 'reduce_stock') {
+                try {
+                    $pdo->prepare(
+                        'UPDATE books
+                         SET title = ?, authors = ?, isbn = ?, published_date = ?,
+                             shelf_number = ?, key_word = ?, classification = ?, media_type = ?,
+                             cover_image = ?
+                         WHERE id = ?'
+                    )->execute([
+                        $title,
+                        $authors,
+                        $isbn !== '' ? $isbn : null,
+                        $publishedDate,
+                        $shelfNumber !== '' ? $shelfNumber : null,
+                        $key_word,
+                        $classification,
+                        $mediaType,
+                        $coverImage,
+                        $bookId,
+                    ]);
 
-        $bookId       = (int) ($_POST['book_id'] ?? 0);
-        $removeCopies = (int) ($_POST['remove_copies'] ?? 0);
+                    if ($coverImage !== $currentCover) {
+                        deleteLocalCover($currentCover);
+                    }
 
-        $stmt = $pdo->prepare('SELECT title, copies_available FROM books WHERE id = ?');
-        $stmt->execute([$bookId]);
-        $book = $stmt->fetch();
-
-        if (!$book) {
-            $flashMessage = 'That book could not be found.';
-            $flashType    = 'error';
-        } elseif ($removeCopies <= 0) {
-            $flashMessage = 'Enter a number of copies greater than zero.';
-            $flashType    = 'error';
-        } elseif ($removeCopies > (int) $book['copies_available']) {
-            $flashMessage = 'Cannot remove ' . $removeCopies . ' cop' . ($removeCopies === 1 ? 'y' : 'ies')
-                . ' — only ' . $book['copies_available'] . ' currently available for "' . $book['title'] . '".';
-            $flashType    = 'error';
-        } else {
-            $pdo->prepare(
-                'UPDATE books SET copies_available = copies_available - ? WHERE id = ?'
-            )->execute([$removeCopies, $bookId]);
-
-            $flashMessage = 'Removed ' . $removeCopies . ' cop' . ($removeCopies === 1 ? 'y' : 'ies')
-                . ' of "' . $book['title'] . '".';
-            $flashType    = 'success';
-        }
-
-    } elseif ($action === 'edit_book') {
-
-        $bookId         = (int) ($_POST['book_id'] ?? 0);
-        $title          = trim($_POST['title'] ?? '');
-        $authors        = trim($_POST['authors'] ?? '');
-        $key_word       = trim($_POST['key_word'] ?? '');
-        $classification = trim($_POST['classification'] ?? '');
-        $isbn           = trim($_POST['isbn'] ?? '');
-        $publishedDate  = trim($_POST['published_date'] ?? '');
-        $shelfNumber    = trim($_POST['shelf_number'] ?? '');
-        $mediaType      = trim($_POST['media_type'] ?? '');
-
-        $stmt = $pdo->prepare('SELECT id FROM books WHERE id = ?');
-        $stmt->execute([$bookId]);
-
-        if (!$stmt->fetch()) {
-            $flashMessage = 'That book could not be found.';
-            $flashType    = 'error';
-        } elseif ($title === '' || $authors === '' || $publishedDate === '' || $mediaType === '') {
-            $flashMessage = 'Title, authors, published date, and media type are required.';
-            $flashType    = 'error';
-        } elseif (!isValidMediaType($mediaType)) {
-            $flashMessage = 'Please choose a valid media type.';
-            $flashType    = 'error';
-        } elseif (!isValidPastDate($publishedDate)) {
-            $flashMessage = 'Published date must be a past date.';
-            $flashType    = 'error';
-        } else {
-            $pdo->prepare(
-                'UPDATE books
-                 SET title = ?, authors = ?, isbn = ?, published_date = ?,
-                     shelf_number = ?, key_word = ?, classification = ?, media_type = ?
-                 WHERE id = ?'
-            )->execute([
-                $title,
-                $authors,
-                $isbn !== '' ? $isbn : null,
-                $publishedDate,
-                $shelfNumber !== '' ? $shelfNumber : null,
-                $key_word,
-                $classification,
-                $mediaType,
-                $bookId,
-            ]);
-
-            $flashMessage = 'Updated "' . $title . '".';
-            $flashType    = 'success';
+                    $flashMessage = 'Updated "' . $title . '".';
+                    $flashType    = 'success';
+                } catch (PDOException $e) {
+                    if ($newCover !== null && $newCover !== $currentCover) {
+                        deleteLocalCover($newCover);
+                    }
+                    $flashMessage = 'Something went wrong updating "' . $title . '". Please try again.';
+                    $flashType    = 'error';
+                }
+            }
         }
     }
 
@@ -244,54 +209,69 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
       <button class="btn btn--round btn--outline" type="button" id="toggle-add" aria-expanded="false" aria-controls="add-item-form">Add new item</button>
     </form>
 
-    <form class="panel panel--lg form-stack" id="add-item-form" hidden novalidate>
+    <form class="panel panel--lg form-stack" id="add-item-form" method="post" action="<?= h($formAction) ?>" enctype="multipart/form-data" hidden data-native-submit>
+      <input type="hidden" name="action" value="add_book">
       <div class="form-grid form-grid--2">
         <div class="field">
           <label for="f-title">Title</label>
-          <input class="input" id="f-title" name="title" type="text" value="" placeholder="Title of the item" >
+          <input class="input" id="f-title" name="title" type="text" placeholder="Title of the item" required>
         </div>
         <div class="field">
           <label for="f-authors">Authors (comma-separated)</label>
-          <input class="input" id="f-authors" name="authors" type="text" value="" placeholder="e.g. Carl Sagan, Ann Druyan" >
+          <input class="input" id="f-authors" name="authors" type="text" placeholder="e.g. Carl Sagan, Ann Druyan" required>
         </div>
         <div class="field">
           <label for="f-mediatype">Media type</label>
-          <select class="select" id="f-mediatype" name="mediatype"><option value="">Select a media type...</option><option value="Book">Book</option><option value="Board Game">Board Game</option><option value="Audiovisual">Audiovisual</option><option value="Digital Media">Digital Media</option></select>
+          <select class="select" id="f-mediatype" name="media_type" required>
+            <option value="">Select a media type...</option>
+            <?php foreach (MEDIA_TYPES as $key => $label): ?>
+              <option value="<?= h($key) ?>"><?= h($label) ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
         <div class="field">
           <label for="f-isbn">ISBN</label>
-          <input class="input" id="f-isbn" name="isbn" type="text" value="" placeholder="e.g. 978-0-345-53943-4" >
+          <input class="input" id="f-isbn" name="isbn" type="text" placeholder="e.g. 978-0-345-53943-4">
         </div>
       </div>
       <div class="form-grid form-grid--3">
         <div class="field">
           <label for="f-published">Published date</label>
-          <input class="input" id="f-published" name="published" type="date" value="" max="<?= h($maxPublished) ?>">
+          <input class="input" id="f-published" name="published_date" type="date" max="<?= h($maxPublished) ?>" required>
         </div>
         <div class="field">
           <label for="f-shelf">Shelf number</label>
-          <input class="input" id="f-shelf" name="shelf" type="text" value="" placeholder="e.g. A-1" >
+          <input class="input" id="f-shelf" name="shelf_number" type="text" placeholder="e.g. A-1">
         </div>
         <div class="field">
           <label for="f-copies">Copies available</label>
-          <input class="input" id="f-copies" name="copies" type="number" value="1" placeholder="" min="0" inputmode="numeric">
+          <input class="input" id="f-copies" name="copies_available" type="number" value="1" min="0" inputmode="numeric" required>
         </div>
       </div>
       <div class="form-grid form-grid--2">
         <div class="field">
           <label for="f-keywords">Key words (comma-separated)</label>
-          <input class="input" id="f-keywords" name="keywords" type="text" value="" placeholder="e.g. Computer Science, PHP, Information Technology" >
+          <input class="input" id="f-keywords" name="key_word" type="text" placeholder="e.g. Computer Science, PHP, Information Technology">
         </div>
         <div class="field">
           <label for="f-classification">Classification</label>
-          <select class="select" id="f-classification" name="classification"><option>General Works, Computer Science, and Information</option><option>Philosophy and Psychology</option><option>Religion</option><option>Social Sciences</option><option>Language</option><option>Science</option><option>Technology</option><option>Arts and Recreation</option><option>Literature</option><option>History and Geography</option></select>
+          <select class="select" id="f-classification" name="classification">
+            <?php foreach ($catalogClassifications as $category): ?>
+              <option value="<?= h($category) ?>"><?= h($category) ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
       </div>
       <div class="field">
-          <label for="f-cover">Cover Image (.jpg, .png)</label>
-          <input class="input" id="f-cover" name="cover" type="url" value="" placeholder="Paste image URL..." >
-        </div>
-      <div class="actions"><button class="btn btn--round" type="button">Upload Image</button></div>
+        <label for="f-cover">Cover Image (.jpg, .png)</label>
+        <input class="input" id="f-cover" name="cover_url" type="url" placeholder="Paste image URL...">
+      </div>
+      <div class="actions" style="align-items:center;gap:12px">
+        <input type="file" id="f-cover-file" name="cover_file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" hidden>
+        <button class="btn btn--round" type="button" id="upload-cover">Upload Image</button>
+        <span id="cover-file-name" aria-live="polite">No file chosen</span>
+        <img id="cover-preview" alt="Cover preview" hidden style="height:64px;border-radius:6px">
+      </div>
       <div><button class="btn btn--round" type="submit">Add Item</button></div>
     </form>
 
@@ -312,7 +292,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           if (!empty($book['shelf_number'])) { $meta[] = 'Shelf ' . $book['shelf_number']; }
         ?>
         <article class="book-card" data-title="<?= h($book['title']) ?>" data-copies="<?= $copiesLeft ?>" data-type="<?= h($typeLabel) ?>">
-          <div class="book-card__cover" role="img" aria-label="Cover placeholder for <?= h($book['title']) ?>"></div>
+          <div class="book-card__cover" role="img" aria-label="<?= empty($book['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($book['title']) ?>"<?= coverStyleAttr($book['cover_image'] ?? null) ?>></div>
           <div class="book-card__body">
             <div class="book-card__top"><span class="pill <?= $pillClass ?>"><?= h($typeLabel) ?></span></div>
             <h3 class="book-card__title"><?= h($book['title']) ?></h3>
@@ -333,7 +313,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
 
             <!-- Edit info -->
             <div class="book-card__panel" id="edit-<?= $bookId ?>" hidden>
-              <form method="POST" action="<?= h($formAction) ?>">
+              <form method="POST" action="<?= h($formAction) ?>" enctype="multipart/form-data" data-native-submit>
                 <input type="hidden" name="action" value="edit_book">
                 <input type="hidden" name="book_id" value="<?= $bookId ?>">
                 <div class="field">
@@ -376,6 +356,18 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
                     <?php endforeach; ?>
                   </select>
                 </div>
+                <div class="field">
+                  <label for="edit-coverurl-<?= $bookId ?>">Change cover image URL</label>
+                  <input class="input" id="edit-coverurl-<?= $bookId ?>" name="cover_url" type="url" value="<?= coverIsUrl($book['cover_image'] ?? null) ? h($book['cover_image']) : '' ?>" placeholder="Paste image URL...">
+                </div>
+                <div class="field">
+                  <label for="edit-coverfile-<?= $bookId ?>">Or upload a new image (.jpg, .png, max 2 MB)</label>
+                  <input class="input" id="edit-coverfile-<?= $bookId ?>" name="cover_file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png">
+                </div>
+                <?php if (!empty($book['cover_image'])): ?>
+                  <label class="choice"><input type="checkbox" name="remove_cover" value="1"> Remove current cover</label>
+                <?php endif; ?>
+                <p style="font-size:12px;opacity:.75;margin:4px 0 8px">Leave both empty to keep the current cover. An uploaded file replaces the URL.</p>
                 <button class="btn btn--round btn--sm" type="submit">Save Changes</button>
               </form>
             </div>
@@ -431,18 +423,49 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
   </div>
 
   <script>
-    // Block future dates even though the form is novalidate
+    // "Upload Image": open the file picker, validate the choice, show a preview
     (function () {
-      var form = document.getElementById('add-item-form');
-      var d = document.getElementById('f-published');
-      form.addEventListener('submit', function (e) {
-        if (d.value && d.value > d.max) {
-          e.preventDefault(); e.stopImmediatePropagation();
-          d.setCustomValidity('Please choose a past date.');
-          d.reportValidity();
-          d.setCustomValidity('');
+      var file = document.getElementById('f-cover-file');
+      var name = document.getElementById('cover-file-name');
+      var preview = document.getElementById('cover-preview');
+      var url = document.getElementById('f-cover');
+
+      function clearFile(message) {
+        file.value = '';
+        name.textContent = message || 'No file chosen';
+        preview.hidden = true;
+        preview.removeAttribute('src');
+      }
+
+      // Capture phase so the page's other click handlers don't also react to this button
+      document.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('#upload-cover')) {
+          e.stopImmediatePropagation();
+          file.click();
         }
       }, true);
+
+      file.addEventListener('change', function () {
+        var f = file.files[0];
+        if (!f) { clearFile(); return; }
+        if (!/\.(jpe?g|png)$/i.test(f.name) || !/^image\/(jpeg|png)$/.test(f.type)) {
+          clearFile('Please choose a .jpg or .png file.');
+          return;
+        }
+        if (f.size > 2 * 1024 * 1024) {
+          clearFile('That image is over the 2 MB limit.');
+          return;
+        }
+        name.textContent = f.name;
+        preview.src = URL.createObjectURL(f);
+        preview.hidden = false;
+        url.value = '';
+      });
+
+      // Typing a URL replaces a chosen file
+      url.addEventListener('input', function () {
+        if (url.value && file.files.length) clearFile();
+      });
     })();
   </script>
   <script>
