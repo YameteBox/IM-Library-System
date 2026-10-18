@@ -93,7 +93,7 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
             if (!empty($book['shelf_number'])) { $meta[] = 'Shelf ' . $book['shelf_number']; }
           ?>
         <article class="book-card" data-book-id="<?= $bookId ?>" data-title="<?= h($book['title']) ?>" data-copies="<?= $copiesLeft ?>" data-type="<?= h($typeLabel) ?>">
-          <div class="book-card__cover" role="img" aria-label="<?= empty($book['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($book['title']) ?>"<?= coverStyleAttr($book['cover_image'] ?? null) ?>></div>
+          <div class="book-card__cover<?= !empty($book['cover_image']) ? ' has-cover' : '' ?>" role="img" aria-label="<?= empty($book['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($book['title']) ?>"><?= coverImgHtml($book['cover_image'] ?? null) ?></div>
           <div class="book-card__body">
             <div class="book-card__top">
               <span class="pill <?= $pillClass ?>"><?= h($typeLabel) ?></span>

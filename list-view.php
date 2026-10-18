@@ -1,5 +1,23 @@
 <?php
 require 'db.php';
+require_once 'media_types.php';
+require_once 'search_helpers.php';
+ensureCoverColumn($pdo);
+
+// Cover images for the books on this page, looked up by title
+$coversByTitle = [];
+foreach ($pdo->query("SELECT title, cover_image FROM books WHERE cover_image IS NOT NULL AND cover_image <> ''")->fetchAll() as $row) {
+    $coversByTitle[$row['title']] = $row['cover_image'];
+}
+
+/** The .book-card__cover for a book: its cover image, or the paper placeholder. */
+function listCover(string $title, array $covers): string
+{
+    $cover = $covers[$title] ?? null;
+    return '<div class="book-card__cover' . ($cover ? ' has-cover' : '') . '" role="img" aria-label="'
+        . h(($cover ? 'Cover of ' : 'Cover placeholder for ') . $title) . '">'
+        . coverImgHtml($cover) . '</div>';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -34,7 +52,7 @@ require 'db.php';
     <h2 class="section-title">Books in this list (<span id="list-count">3</span>)</h2>
     <div class="book-grid" id="list-books">
         <article class="book-card" data-title="Noli Me Tángere" data-copies="3" data-type="Book">
-          <div class="book-card__cover" role="img" aria-label="Cover placeholder for Noli Me Tángere"></div>
+          <?= listCover('Noli Me Tángere', $coversByTitle) ?>
           <div class="book-card__body">
             <div class="book-card__top"><span class="pill pill--blue">Book</span><span class="pill pill--ok">3 copies available</span></div>
             <h3 class="book-card__title">Noli Me Tángere</h3>
@@ -48,7 +66,7 @@ require 'db.php';
           </div>
         </article>
         <article class="book-card" data-title="Cosmos" data-copies="3" data-type="Book">
-          <div class="book-card__cover" role="img" aria-label="Cover placeholder for Cosmos"></div>
+          <?= listCover('Cosmos', $coversByTitle) ?>
           <div class="book-card__body">
             <div class="book-card__top"><span class="pill pill--blue">Book</span><span class="pill pill--ok">3 copies available</span></div>
             <h3 class="book-card__title">Cosmos</h3>
@@ -62,7 +80,7 @@ require 'db.php';
           </div>
         </article>
         <article class="book-card" data-title="Catan" data-copies="3" data-type="Board Game">
-          <div class="book-card__cover" role="img" aria-label="Cover placeholder for Catan"></div>
+          <?= listCover('Catan', $coversByTitle) ?>
           <div class="book-card__body">
             <div class="book-card__top"><span class="pill pill--green">Board Game</span><span class="pill pill--ok">3 copies available</span></div>
             <h3 class="book-card__title">Catan</h3>
