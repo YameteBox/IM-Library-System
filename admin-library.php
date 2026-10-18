@@ -173,6 +173,26 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
     .history-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
     .history-table th, .history-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(128,128,128,.25); vertical-align: top; }
     .history-table small { opacity: .7; }
+    /* Receipt: 3.5 x 5 in, same size on screen and on paper */
+    #receipt-dialog { border: 0; border-radius: 12px; padding: 16px; width: auto; max-width: calc(100% - 32px); }
+    #receipt-dialog::backdrop { background: rgba(0,0,0,.5); }
+    .receipt { box-sizing: border-box; width: 3.5in; max-width: 100%; height: 5in; padding: .25in; display: flex; flex-direction: column;
+      font-family: "Courier New", monospace; font-size: 10pt; line-height: 1.35; color: #000; background: #fff; border: 1px dashed #888; overflow: hidden; }
+    .receipt h2 { font-size: 13pt; text-align: center; margin: 0 0 2px; }
+    .receipt__sub { text-align: center; font-size: 9pt; margin: 0 0 .15in; }
+    .receipt dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; }
+    .receipt dt { font-weight: 700; }
+    .receipt dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+    .receipt__foot { margin: auto 0 0; text-align: center; font-size: 8pt; border-top: 1px dashed #888; padding-top: 8px; }
+    .receipt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    @page { size: 3.5in 5in; margin: 0; }
+    @media print {
+      html, body { margin: 0; padding: 0; background: #fff; }
+      body > *:not(#receipt-dialog) { display: none !important; }
+      #receipt-dialog { position: static; inset: auto; margin: 0; padding: 0; border: 0; border-radius: 0; width: 3.5in; height: 5in; max-width: none; overflow: hidden; }
+      .receipt { border: 0; break-inside: avoid; }
+      .receipt-actions { display: none !important; }
+    }
   </style>
 </head>
 <body data-page="admin-library">
@@ -192,7 +212,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         <a class="nav__link" href="admin-login.php">Log out</a>
       </nav>
     </header>
-    <nav class="tabs" aria-label="Admin sections"><a class="tab is-active" href="admin-library.php" aria-current="page">Catalog</a><a class="tab" href="admin-requests.php">Pending requests</a><a class="tab" href="admin-on-loan.php">On loan</a></nav>
+    <nav class="tabs" role="tablist" aria-label="Admin sections"><a class="tab is-active" href="#catalog" role="tab" data-tab="catalog" aria-selected="true" aria-current="page">Catalog</a><a class="tab" href="#requests" role="tab" data-tab="requests" aria-selected="false">Pending requests</a><a class="tab" href="#loan" role="tab" data-tab="loan" aria-selected="false">On loan</a></nav>
     <div class="toast-region" data-toast-region aria-live="polite">
       <?php if ($flashMessage !== ''): ?>
         <div class="alert alert-<?= $flashType === 'success' ? 'success' : 'danger' ?> alert-dismissible fade show" role="alert">
@@ -201,6 +221,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         </div>
       <?php endif; ?>
     </div>
+    <section id="tab-catalog" role="tabpanel" data-tab-panel>
     <form class="toolbar" id="catalog-search" role="search" method="get" action="admin-library.php" data-server-search>
       <input class="input" name="q" type="search" value="<?= h($search['q']) ?>" placeholder="Search catalog..." aria-label="Search catalog">
       <select class="select" name="type" aria-label="Media type"><?= mediaTypeFilterOptions($search['type']) ?></select>
@@ -420,7 +441,76 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         </article>
       <?php endforeach; ?>
     </div>
+    </section>
+
+    <section id="tab-requests" role="tabpanel" data-tab-panel hidden>
+      <div class="request-grid" id="request-grid">
+        <article class="request-card" data-title="Cosmos">
+          <h3 class="request-card__title">Cosmos</h3>
+          <p class="request-card__line">Borrower: juan.delacruz (#2023-00456)</p>
+          <p class="request-card__date">Requested October 15, 2026</p>
+          <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
+        </article>
+        <article class="request-card" data-title="Catan">
+          <h3 class="request-card__title">Catan</h3>
+          <p class="request-card__line">Borrower: ana.reyes (#2023-00210)</p>
+          <p class="request-card__date">Requested October 16, 2026</p>
+          <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
+        </article>
+        <article class="request-card" data-title="Noli Me Tángere">
+          <h3 class="request-card__title">Noli Me Tángere</h3>
+          <p class="request-card__line">Borrower: miguel.cruz (#2023-00388)</p>
+          <p class="request-card__date">Requested October 17, 2026</p>
+          <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-loan" role="tabpanel" data-tab-panel hidden>
+      <div class="request-grid" id="loan-grid">
+        <article class="request-card" data-title="Cosmos">
+          <h3 class="request-card__title">Cosmos</h3>
+          <p class="request-card__line">Borrower: juan.delacruz (#2023-00456)</p>
+          <p class="request-card__date">Due October 22, 2026</p>
+          <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
+        </article>
+        <article class="request-card" data-title="El Filibusterismo">
+          <h3 class="request-card__title">El Filibusterismo</h3>
+          <p class="request-card__line">Borrower: ana.reyes (#2023-00210)</p>
+          <p class="request-card__date">Due October 23, 2026</p>
+          <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
+        </article>
+        <article class="request-card" data-title="Catan">
+          <h3 class="request-card__title">Catan</h3>
+          <p class="request-card__line">Borrower: miguel.cruz (#2023-00388)</p>
+          <p class="request-card__date">Due October 25, 2026</p>
+          <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
+        </article>
+      </div>
+    </section>
   </div>
+
+  <!-- Loan receipt (shown after a request is approved) -->
+  <dialog id="receipt-dialog" aria-labelledby="receipt-heading">
+    <div class="receipt" id="receipt-print">
+      <h2 id="receipt-heading">Manila Science High School</h2>
+      <p class="receipt__sub">Online Library · Loan Receipt</p>
+      <dl>
+        <dt>Receipt no.</dt><dd id="rc-no"></dd>
+        <dt>Item</dt><dd id="rc-title"></dd>
+        <dt>Borrower</dt><dd id="rc-borrower"></dd>
+        <dt>Student ID</dt><dd id="rc-sid"></dd>
+        <dt>Requested</dt><dd id="rc-requested"></dd>
+        <dt>Approved</dt><dd id="rc-approved"></dd>
+        <dt>Due date</dt><dd id="rc-due"></dd>
+      </dl>
+      <p class="receipt__foot">Approved by Admin #A-001. Please return on or before the due date.</p>
+    </div>
+    <div class="receipt-actions">
+      <button type="button" class="btn btn--outline" id="close-receipt">Close</button>
+      <button type="button" class="btn" id="print-receipt">Print receipt</button>
+    </div>
+  </dialog>
 
   <script>
     // "Upload Image": open the file picker, validate the choice, show a preview
@@ -502,5 +592,74 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
   </script>
   <script src="js/server-search.js?v=3"></script>
   <script src="js/app.js?v=2"></script>
+  <script>
+    // Catalog / Pending requests / On loan tabs (URL hash keeps the open tab)
+    (function () {
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.tabs [data-tab]'));
+      var panels = Array.prototype.slice.call(document.querySelectorAll('[data-tab-panel]'));
+
+      function show(name) {
+        if (!document.getElementById('tab-' + name)) name = 'catalog';
+        tabs.forEach(function (t) {
+          var on = t.dataset.tab === name;
+          t.classList.toggle('is-active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
+        });
+        panels.forEach(function (p) { p.hidden = p.id !== 'tab-' + name; });
+      }
+
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function (e) {
+          e.preventDefault();
+          show(t.dataset.tab);
+          history.replaceState(null, '', location.pathname + location.search + '#' + t.dataset.tab);
+        });
+      });
+      window.addEventListener('hashchange', function () { show(location.hash.slice(1)); });
+      show(location.hash.slice(1));
+    })();
+  </script>
+  <script>
+    // Print receipt: after Approve, show a receipt the admin can print.
+    // Capture phase, so the card's data is read before app.js updates/removes it.
+    (function () {
+      var LOAN_DAYS = 7; // loan period used for the due date on the receipt
+      var dialog = document.getElementById('receipt-dialog');
+
+      function fmt(d) {
+        return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      function set(id, text) { document.getElementById(id).textContent = text; }
+      var pad = function (n) { return String(n).padStart(2, '0'); };
+
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('#tab-requests [data-action="approve"]');
+        if (!btn) return;
+        var card = btn.closest('.request-card');
+        if (!card) return;
+
+        var line = (card.querySelector('.request-card__line') || {}).textContent || '';
+        var m = line.match(/Borrower:\s*(.+?)\s*\(#?([^)]+)\)/);
+        var requested = ((card.querySelector('.request-card__date') || {}).textContent || '')
+          .replace(/^\s*Requested\s*/i, '').trim();
+        var now = new Date();
+        var due = new Date(now.getTime() + LOAN_DAYS * 86400000);
+
+        set('rc-no', 'R-' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) +
+          '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()));
+        set('rc-title', card.dataset.title || '');
+        set('rc-borrower', m ? m[1] : line);
+        set('rc-sid', m ? '#' + m[2] : '');
+        set('rc-requested', requested);
+        set('rc-approved', fmt(now));
+        set('rc-due', fmt(due));
+        dialog.showModal();
+      }, true);
+
+      document.getElementById('print-receipt').addEventListener('click', function () { window.print(); });
+      document.getElementById('close-receipt').addEventListener('click', function () { dialog.close(); });
+    })();
+  </script>
 </body>
 </html>

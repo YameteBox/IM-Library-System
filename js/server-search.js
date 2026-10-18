@@ -1,14 +1,25 @@
-/* Search forms marked data-server-search are answered by PHP (GET request).
-   Stop the page script's client-side handlers for them, but leave the browser's
-   default form submission alone. Load this before app.js. */
+/* Forms handled by PHP instead of app.js:
+   - data-server-search: GET search forms. Their submit/input/change/keyup events
+     are kept away from app.js's client-side filtering.
+   - data-native-submit: forms that must really POST (e.g. with a file upload).
+     Only their submit event is kept away from app.js.
+   In both cases the browser's default submission is left alone.
+   Load this before app.js. */
 (function () {
   'use strict';
-  function intercept(e) {
+
+  function closestForm(e, selector) {
     var t = e.target;
-    var form = t && t.closest ? t.closest('form[data-server-search]') : null;
-    if (form) e.stopImmediatePropagation();
+    return t && t.closest ? t.closest(selector) : null;
   }
+
   ['submit', 'input', 'change', 'keyup'].forEach(function (type) {
-    document.addEventListener(type, intercept, true);
+    document.addEventListener(type, function (e) {
+      if (closestForm(e, 'form[data-server-search]')) e.stopImmediatePropagation();
+    }, true);
   });
+
+  document.addEventListener('submit', function (e) {
+    if (closestForm(e, 'form[data-native-submit]')) e.stopImmediatePropagation();
+  }, true);
 })();
