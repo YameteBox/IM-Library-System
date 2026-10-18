@@ -292,7 +292,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           if (!empty($book['shelf_number'])) { $meta[] = 'Shelf ' . $book['shelf_number']; }
         ?>
         <article class="book-card" data-title="<?= h($book['title']) ?>" data-copies="<?= $copiesLeft ?>" data-type="<?= h($typeLabel) ?>">
-          <div class="book-card__cover" role="img" aria-label="<?= empty($book['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($book['title']) ?>"<?= coverStyleAttr($book['cover_image'] ?? null) ?>></div>
+          <div class="book-card__cover<?= !empty($book['cover_image']) ? ' has-cover' : '' ?>" role="img" aria-label="<?= empty($book['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($book['title']) ?>"><?= coverImgHtml($book['cover_image'] ?? null) ?></div>
           <div class="book-card__body">
             <div class="book-card__top"><span class="pill <?= $pillClass ?>"><?= h($typeLabel) ?></span></div>
             <h3 class="book-card__title"><?= h($book['title']) ?></h3>
@@ -483,7 +483,24 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
   </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>
-  <script src="js/server-search.js"></script>
+  <script>
+    // The Add Item form must really POST to PHP. Keep the page script (app.js)
+    // from handling its submit/click (it only shows a pretend "added" message);
+    // the browser's normal form submission is left alone.
+    (function () {
+      function onAddForm(e) {
+        return e.target && e.target.closest && e.target.closest('#add-item-form');
+      }
+      document.addEventListener('submit', function (e) {
+        if (onAddForm(e)) e.stopImmediatePropagation();
+      }, true);
+      document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('#add-item-form button[type="submit"]') : null;
+        if (btn) e.stopImmediatePropagation();
+      }, true);
+    })();
+  </script>
+  <script src="js/server-search.js?v=3"></script>
   <script src="js/app.js?v=2"></script>
 </body>
 </html>

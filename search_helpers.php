@@ -293,13 +293,21 @@ function coverIsUrl(?string $cover): bool
     return $cover !== null && preg_match('#^https?://#i', $cover) === 1;
 }
 
-/** ` style="background-image:..."` for a .book-card__cover, or '' when there is no cover. */
-function coverStyleAttr($cover): string
+/** Safe src for a stored cover (local path or external URL). */
+function coverSrc($cover): string
 {
-    $cover = trim((string) $cover);
-    if ($cover === '') {
+    return h(str_replace([' ', "\n", "\r"], ['%20', '', ''], trim((string) $cover)));
+}
+
+/**
+ * <img> that fills a .book-card__cover and hides the paper texture behind it.
+ * If the picture can't be loaded it removes itself and the paper comes back.
+ */
+function coverImgHtml($cover): string
+{
+    if (trim((string) $cover) === '') {
         return '';
     }
-    $safe = str_replace(["\\", "'", '"', '(', ')', ' ', "\n", "\r"], ['%5C', '%27', '%22', '%28', '%29', '%20', '', ''], $cover);
-    return ' style="background-image:url(\'' . h($safe) . '\')"';
+    return '<img class="book-card__cover-img" src="' . coverSrc($cover) . '" alt="" loading="lazy" '
+        . 'onerror="this.parentNode.classList.remove(\'has-cover\');this.remove()">';
 }
