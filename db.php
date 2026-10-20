@@ -2,7 +2,7 @@
  
 $host = 'localhost';
 $port = '5432';        
-$dbname = 'OPAC_database';
+$dbname = 'Library_Database';
 $dbuser = 'postgres';  
 $dbpass = 'passplease';          
  

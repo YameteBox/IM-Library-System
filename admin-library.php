@@ -94,6 +94,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'add_book') {
+        $newTitle    = trim($_POST['title'] ?? '');
+        $newAuthors  = trim($_POST['authors'] ?? '');
+        $newType     = $_POST['media_type'] ?? '';
+        $newIsbn     = trim($_POST['isbn'] ?? '');
+        $newDate     = trim($_POST['published_date'] ?? '');
+        $newShelf    = trim($_POST['shelf_number'] ?? '');
+        $newCopies   = filter_var($_POST['copies_available'] ?? '', FILTER_VALIDATE_INT);
+        $newKeywords = trim($_POST['key_word'] ?? '');
+        $newClass    = trim($_POST['classification'] ?? '');
+
+        if ($newTitle === '' || $newAuthors === '') {
+            $flashMessage = 'Title and authors are required.';
+            $flashType    = 'error';
+        } elseif (strlen($newTitle) > 255) {
+            $flashMessage = 'Title must be 255 characters or fewer.';
+            $flashType    = 'error';
+        } elseif (!isValidMediaType($newType)) {
+            $flashMessage = 'Please select a media type.';
+            $flashType    = 'error';
+        } elseif (strlen($newIsbn) > 20) {
+            $flashMessage = 'ISBN must be 20 characters or fewer.';
+            $flashType    = 'error';
+        } elseif ($newDate === '' || !isValidPastDate($newDate)) {
+            $flashMessage = 'Enter a valid published date that is before today.';
+            $flashType    = 'error';
+        } elseif (strlen($newShelf) > 20) {
+            $flashMessage = 'Shelf number must be 20 characters or fewer.';
+            $flashType    = 'error';
+        } elseif ($newCopies === false || $newCopies < 0) {
+            $flashMessage = 'Copies must be a whole number, 0 or more.';
+            $flashType    = 'error';
+        } elseif ($newClass !== '' && !in_array($newClass, $catalogClassifications, true)) {
+            $flashMessage = 'Please choose a valid classification.';
+            $flashType    = 'error';
+        } else {
+            [$newCover, $coverError] = saveCoverImage('cover_file', (string) ($_POST['cover_url'] ?? ''));
+
+            if ($coverError !== null) {
+                $flashMessage = $coverError;
+                $flashType    = 'error';
+            } else {
+                try {
+                    $pdo->prepare(
+                        'INSERT INTO books
+                            (title, authors, media_type, isbn, published_date, classification,
+                             key_word, shelf_number, cover_image, total_copies, copies_available)
+                         VALUES
+                            (:title, :authors, :type, :isbn, :pub, :class,
+                             :keys, :shelf, :cover, :copies, :copies)'
+                    )->execute([
+                        ':title'   => $newTitle,
+                        ':authors' => $newAuthors,
+                        ':type'    => $newType,
+                        ':isbn'    => $newIsbn !== '' ? $newIsbn : null,
+                        ':pub'     => $newDate,
+                        ':class'   => $newClass !== '' ? $newClass : null,
+                        ':keys'    => $newKeywords !== '' ? $newKeywords : null,
+                        ':shelf'   => $newShelf !== '' ? $newShelf : null,
+                        ':cover'   => $newCover,
+                        ':copies'  => $newCopies,
+                    ]);
+                    $flashMessage = 'Added "' . $newTitle . '" to the catalog.';
+                    $flashType    = 'success';
+                } catch (PDOException $e) {
+                    if ($newCover !== null) {
+                        deleteLocalCover($newCover);
+                    }
+                    $flashMessage = 'Something went wrong adding "' . $newTitle . '". Please try again.';
+                    $flashType    = 'error';
+                }
+            }
+        }
+    }
+
     if ($flashMessage !== '') {
         $_SESSION['flash_message'] = $flashMessage;
         $_SESSION['flash_type']    = $flashType;

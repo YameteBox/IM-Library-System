@@ -4,13 +4,35 @@ require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
 
+// Must be logged in (login.php sets these session values)
+if (empty($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+$userId        = (int) $_SESSION['user_id'];
+$studentNumber = $_SESSION['student_number'] ?? '';
+$username      = $_SESSION['username'] ?? $studentNumber;
+
 $search = catalogSearchParams($_GET);
 $books  = searchCatalog($pdo, $search);
 
 // Books this student already has a pending request for
-$studentId = $_SESSION['student_id'] ?? '2023-00123';
-// TODO (backend): ids of the books this student has a pending request for.
-$pendingBookIds = [];
+$stmt = $pdo->prepare(
+    "SELECT book_id FROM borrowed_books
+      WHERE user_id = :uid AND status = 'pending' AND returned_at IS NULL"
+);
+$stmt->execute([':uid' => $userId]);
+$pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+
+// Newest books for the carousel
+$newBooks = $pdo->query(
+    'SELECT id, title, authors, cover_image FROM books ORDER BY added_on DESC, id DESC LIMIT 10'
+)->fetchAll(PDO::FETCH_ASSOC);
+
+// This student's lists for the "Select list" dropdown
+$stmt = $pdo->prepare('SELECT id, name FROM lists WHERE user_id = :uid ORDER BY name');
+$stmt->execute([':uid' => $userId]);
+$userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 <!doctype html>
 <html lang="en">
@@ -31,8 +53,8 @@ $pendingBookIds = [];
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">Library — Student #2023-00123</h1>
-          <span class="brand__user">maria.santos</span><span class="role-badge">student</span>
+          <h1 class="brand__title">Library — Student #<?= h($studentNumber) ?></h1>
+          <span class="brand__user"><?= h($username) ?></span><span class="role-badge">student</span>
         </div>
       </div>
       <nav class="nav" aria-label="Main">
@@ -66,7 +88,9 @@ $pendingBookIds = [];
           </div>
         </div>
         <div class="carousel" id="new-books" role="region" aria-roledescription="carousel" aria-label="New books" tabindex="0">
-          <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
+          <?php foreach ($newBooks as $newBook): ?>
+          <article class="mini-card"><div class="mini-card__cover<?= !empty($newBook['cover_image']) ? ' has-cover' : '' ?>" role="img" aria-label="<?= empty($newBook['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($newBook['title']) ?>"><?= coverImgHtml($newBook['cover_image'] ?? null) ?></div><h3 class="mini-card__title"><?= h($newBook['title']) ?></h3><p class="mini-card__author"><?= h($newBook['authors']) ?></p></article>
+          <?php endforeach; ?>
         </div>
       </section>
 
@@ -110,7 +134,7 @@ $pendingBookIds = [];
           <div class="book-card__actions">
             <button class="btn btn--block<?= $isPending ? ' is-disabled' : '' ?>" type="button" data-action="borrow"><?= $isPending ? 'Borrow request pending' : 'Request to borrow' ?></button>
             <div class="add-row">
-              <select class="select" aria-label="Select list"><option value="">Select list</option><option>Summer reading</option><option>Favorites</option></select>
+              <select class="select" aria-label="Select list"><option value="">Select list</option><?php foreach ($userLists as $list): ?><option value="<?= (int) $list['id'] ?>"><?= h($list['name']) ?></option><?php endforeach; ?></select>
               <button class="btn btn--outline" type="button" data-action="add-to-list">Add to list</button>
             </div>
           </div>

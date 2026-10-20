@@ -1,5 +1,49 @@
 <?php
-require 'db.php';
+require 'db.php';   // provides $pdo
+session_start();
+
+if (!empty($_SESSION['user_id'])) {
+    header('Location: welcome.php');
+    exit;
+}
+
+$error   = '';
+$student = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $student  = trim($_POST['student'] ?? '');
+    $password = $_POST['password'] ?? '';
+
+    if ($student === '' || $password === '') {
+        $error = 'Invalid username/student ID or password.';
+    } else {
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT u.id, u.student_number, u.password_hash, u.banned, d.username
+                   FROM users u
+                   LEFT JOIN user_details d ON d.id = u.id
+                  WHERE u.student_number = :sn'
+            );
+            $stmt->execute([':sn' => $student]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$user || !password_verify($password, $user['password_hash'])) {
+                $error = 'Invalid username/student ID or password.';
+            } elseif ($user['banned']) {
+                $error = 'User has been banned.';
+            } else {
+                session_regenerate_id(true);
+                $_SESSION['user_id']        = (int) $user['id'];
+                $_SESSION['student_number'] = $user['student_number'];
+                $_SESSION['username']       = $user['username'] ?? $user['student_number'];
+                header('Location: welcome.php');
+                exit;
+            }
+        } catch (Throwable $e) {
+            $error = 'Server error. Please try again.';
+        }
+    }
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -22,17 +66,22 @@ require 'db.php';
           <h2 class="card-title" id="t">Welcome back</h2>
           <p class="sub">Log in with your student number.</p>
           <div class="toast-region" data-toast-region aria-live="polite"></div>
-          <form class="form-stack" id="login-form" novalidate>
+
+          <form class="form-stack" id="login-form" method="post" action="login.php" novalidate>
+            <?php if ($error !== ''): ?>
+              <p role="alert" style="color:#b91c1c;margin:0 0 .75rem;font-size:.9rem;"><?= htmlspecialchars($error) ?></p>
+            <?php endif; ?>
             <div class="field">
-          <label for="f-student">Student Number</label>
-          <input class="input" id="f-student" name="student" type="text" value="2023-00123" placeholder="" autocomplete="username">
-        </div>
+              <label for="f-student">Student Number</label>
+              <input class="input" id="f-student" name="student" type="text" value="<?= htmlspecialchars($student) ?>" placeholder="" autocomplete="username">
+            </div>
             <div class="field">
-          <label for="f-password">Password</label>
-          <input class="input" id="f-password" name="password" type="password" value="password" placeholder="" autocomplete="current-password">
-        </div>
+              <label for="f-password">Password</label>
+              <input class="input" id="f-password" name="password" type="password" value="" placeholder="" autocomplete="current-password">
+            </div>
             <button class="btn btn--block btn--round" type="submit">Log In</button>
           </form>
+
           <div class="link-stack">
             <p class="link-row">Don't have an account? <a href="register.php">Register now</a></p>
             <p class="link-row">Are you an admin? <a href="admin-login.php">Log in</a></p>
@@ -41,9 +90,6 @@ require 'db.php';
       </main>
     </div>
   </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="js/alerts.js"></script>
-  <script src="js/app.js?v=2"></script>
+  <!-- js/app.js is intentionally not loaded here: its prototype login would bypass the database check. -->
 </body>
 </html>
