@@ -9,9 +9,8 @@ $books  = searchCatalog($pdo, $search);
 
 // Books this student already has a pending request for
 $studentId = $_SESSION['student_id'] ?? '2023-00123';
-$stmt = $pdo->prepare("SELECT book_id FROM loans WHERE CAST(user_id AS TEXT) = ? AND status = 'pending' AND returned_at IS NULL");
-$stmt->execute([(string) $studentId]);
-$pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+// TODO (backend): ids of the books this student has a pending request for.
+$pendingBookIds = [];
 ?>
 <!doctype html>
 <html lang="en">
@@ -25,38 +24,6 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/sidebar.css">
-  <style>
-    /* Chatbot launcher (visual only for now) */
-    .chatbot-fab {
-      position: fixed;
-      right: 24px;
-      bottom: 24px;
-      z-index: 1000;
-      width: 60px;
-      height: 60px;
-      padding: 0;
-      border: 0;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      background: #1E5EBA;
-      color: #fff;
-      cursor: pointer;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
-      transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
-    }
-    .chatbot-fab:hover { background: #1a52a3; transform: translateY(-2px); box-shadow: 0 10px 22px rgba(0, 0, 0, .3); }
-    .chatbot-fab:active { transform: translateY(0); }
-    .chatbot-fab:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px #1E5EBA; }
-    .chatbot-fab svg { width: 28px; height: 28px; display: block; }
-    @media (max-width: 600px) {
-      .chatbot-fab { right: 16px; bottom: 16px; width: 54px; height: 54px; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .chatbot-fab { transition: none; }
-    }
-  </style>
 </head>
 <body data-page="library">
   <div class="page">
@@ -72,6 +39,7 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
         <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
+        <a class="nav__link" href="dashboard.php">Dashboard</a>
         <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
@@ -97,12 +65,7 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
             <button class="icon-btn" type="button" id="next-books" aria-label="Next">›</button>
           </div>
         </div>
-        <div class="carousel" id="new-books">
-          <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
-          <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
-          <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
-          <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
-          <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
+        <div class="carousel" id="new-books" role="region" aria-roledescription="carousel" aria-label="New books" tabindex="0">
           <article class="mini-card"><div class="mini-card__cover" role="img" aria-label="Cover placeholder"></div><h3 class="mini-card__title">Noli Me Tángere</h3><p class="mini-card__author">José Rizal</p></article>
         </div>
       </section>
@@ -162,15 +125,90 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
     </footer>
   </div>
 
-  <!-- Chatbot launcher: visual only, no behaviour yet -->
-  <button class="chatbot-fab" type="button" aria-label="Open chatbot" title="Chat with the library assistant">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Chatbot launcher and window: visual only, no messaging yet -->
+  <section class="chatbot-window" id="chatbot-window" role="dialog" aria-labelledby="chatbot-title" hidden>
+    <div class="chatbot-window__head">
+      <div>
+        <h2 class="chatbot-window__title" id="chatbot-title">Library assistant</h2>
+        <p class="chatbot-window__sub">Ask about books, loans and more</p>
+      </div>
+      <button class="chatbot-window__x" type="button" id="chatbot-close" aria-label="Close chatbot">✕</button>
+    </div>
+    <div class="chatbot-window__body" aria-live="polite">
+      <div class="chatbot-msg chatbot-msg--bot">Hi! I'm the library assistant. Chat is coming soon.</div>
+    </div>
+    <div class="chatbot-window__foot">
+      <input class="chatbot-window__input" type="text" placeholder="Type a message..." aria-label="Message" disabled>
+      <button class="chatbot-window__send" type="button" disabled>Send</button>
+    </div>
+  </section>
+
+  <button class="chatbot-fab" type="button" id="chatbot-toggle" aria-label="Open chatbot" title="Chat with the library assistant" aria-expanded="false" aria-controls="chatbot-window">
+    <svg class="chatbot-fab__open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.6-.8L3 21l1.9-5.1A8.3 8.3 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z"/>
       <circle cx="8.5" cy="11.5" r=".6" fill="currentColor"/>
       <circle cx="12" cy="11.5" r=".6" fill="currentColor"/>
       <circle cx="15.5" cy="11.5" r=".6" fill="currentColor"/>
     </svg>
+    <svg class="chatbot-fab__close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18"/>
+    </svg>
   </button>
+  <script>
+    // New books carousel: arrows scroll one page at a time
+    (function () {
+      var track = document.getElementById('new-books');
+      var prev  = document.getElementById('prev-books');
+      var next  = document.getElementById('next-books');
+      if (!track || !prev || !next) return;
+
+      function pageWidth() {
+        var card = track.querySelector('.mini-card');
+        if (!card) return track.clientWidth;
+        var style = getComputedStyle(track);
+        var gap   = parseFloat(style.columnGap || style.gap) || 0;
+        var unit  = card.offsetWidth + gap;
+        return unit * Math.max(1, Math.floor((track.clientWidth + gap) / unit));
+      }
+      function update() {
+        var max = track.scrollWidth - track.clientWidth;
+        prev.hidden = next.hidden = max <= 1;
+        prev.disabled = track.scrollLeft <= 1;
+        next.disabled = track.scrollLeft >= max - 1;
+      }
+      function go(dir) { track.scrollBy({ left: dir * pageWidth() }); }
+
+      // Capture phase so these buttons only do this, even if another script also binds them
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('#prev-books, #next-books');
+        if (!btn) return;
+        e.stopImmediatePropagation();
+        go(btn.id === 'prev-books' ? -1 : 1);
+      }, true);
+
+      track.addEventListener('scroll', update, { passive: true });
+      window.addEventListener('resize', update);
+      update();
+    })();
+  </script>
+  <script>
+    // Chatbot window: open/close only
+    (function () {
+      var fab = document.getElementById('chatbot-toggle');
+      var win = document.getElementById('chatbot-window');
+      var closeBtn = document.getElementById('chatbot-close');
+      function setOpen(open) {
+        win.hidden = !open;
+        fab.setAttribute('aria-expanded', open ? 'true' : 'false');
+        fab.setAttribute('aria-label', open ? 'Close chatbot' : 'Open chatbot');
+      }
+      fab.addEventListener('click', function () { setOpen(win.hidden); });
+      closeBtn.addEventListener('click', function () { setOpen(false); fab.focus(); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && !win.hidden) { setOpen(false); fab.focus(); }
+      });
+    })();
+  </script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>

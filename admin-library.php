@@ -48,9 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bookId    = (int) ($_POST['book_id'] ?? 0);
         $addCopies = (int) ($_POST['add_copies'] ?? 0);
 
-        $stmt = $pdo->prepare('SELECT title FROM books WHERE id = ?');
-        $stmt->execute([$bookId]);
-        $book = $stmt->fetch();
+        // TODO (backend): look up the book with id $bookId; set $book = null when it doesn't exist
+        $book = ['title' => ''];
 
         if (!$book) {
             $flashMessage = 'That book could not be found.';
@@ -75,24 +74,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 try {
-                    $pdo->prepare(
-                        'UPDATE books
-                         SET title = ?, authors = ?, isbn = ?, published_date = ?,
-                             shelf_number = ?, key_word = ?, classification = ?, media_type = ?,
-                             cover_image = ?
-                         WHERE id = ?'
-                    )->execute([
-                        $title,
-                        $authors,
-                        $isbn !== '' ? $isbn : null,
-                        $publishedDate,
-                        $shelfNumber !== '' ? $shelfNumber : null,
-                        $key_word,
-                        $classification,
-                        $mediaType,
-                        $coverImage,
-                        $bookId,
-                    ]);
+                    // TODO (backend): update the book $bookId with $title, $authors, $isbn, $publishedDate,
+                    // $shelfNumber, $key_word, $classification, $mediaType and $coverImage
 
                     if ($coverImage !== $currentCover) {
                         deleteLocalCover($currentCover);
@@ -131,24 +114,9 @@ $search = catalogSearchParams($_GET);
 $books  = searchCatalog($pdo, $search);
 
 // Full loan history (every status, including returned), grouped by book
-$stmt = $pdo->query("
-    SELECT
-        loans.id AS loan_id,
-        loans.book_id,
-        loans.status,
-        loans.borrowed_at,
-        loans.due_date,
-        loans.returned_at,
-        users.username AS borrower_username,
-        users.student_id AS borrower_student_id
-    FROM loans
-    INNER JOIN users ON loans.user_id = users.student_id
-    ORDER BY loans.borrowed_at DESC
-");
+// TODO (backend): every loan (any status, including returned), newest first, grouped by book id.
+// Row keys: loan_id, book_id, status, borrowed_at, due_date, returned_at, borrower_username, borrower_student_id.
 $loanHistoryByBook = [];
-foreach ($stmt->fetchAll() as $historyLoan) {
-    $loanHistoryByBook[$historyLoan['book_id']][] = $historyLoan;
-}
 
 $maxPublished = date('Y-m-d', strtotime('-1 day'));
 ?>
@@ -208,6 +176,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
       </div>
       <nav class="nav" aria-label="Main">
         <a class="nav__link" href="admin-register.php">Register New User</a>
+        <a class="nav__link" href="admin-events.php">Calendar Events</a>
         <a class="nav__link" href="suspend-user.php">Suspend / Unsuspend User</a>
         <a class="nav__link" href="admin-profile.php">Profile</a>
         <a class="nav__link" href="admin-login.php">Log out</a>
@@ -452,18 +421,6 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           <p class="request-card__date">Requested October 15, 2026</p>
           <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
         </article>
-        <article class="request-card" data-title="Catan">
-          <h3 class="request-card__title">Catan</h3>
-          <p class="request-card__line">Borrower: ana.reyes (#2023-00210)</p>
-          <p class="request-card__date">Requested October 16, 2026</p>
-          <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
-        </article>
-        <article class="request-card" data-title="Noli Me Tángere">
-          <h3 class="request-card__title">Noli Me Tángere</h3>
-          <p class="request-card__line">Borrower: miguel.cruz (#2023-00388)</p>
-          <p class="request-card__date">Requested October 17, 2026</p>
-          <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
-        </article>
       </div>
     </section>
 
@@ -473,18 +430,6 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           <h3 class="request-card__title">Cosmos</h3>
           <p class="request-card__line">Borrower: juan.delacruz (#2023-00456)</p>
           <p class="request-card__date">Due October 22, 2026</p>
-          <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
-        </article>
-        <article class="request-card" data-title="El Filibusterismo">
-          <h3 class="request-card__title">El Filibusterismo</h3>
-          <p class="request-card__line">Borrower: ana.reyes (#2023-00210)</p>
-          <p class="request-card__date">Due October 23, 2026</p>
-          <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
-        </article>
-        <article class="request-card" data-title="Catan">
-          <h3 class="request-card__title">Catan</h3>
-          <p class="request-card__line">Borrower: miguel.cruz (#2023-00388)</p>
-          <p class="request-card__date">Due October 25, 2026</p>
           <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
         </article>
       </div>

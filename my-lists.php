@@ -46,12 +46,6 @@ require 'db.php';
           <div class="rename-row"><input class="input" value="Summer reading" aria-label="List name"><button class="btn" type="button" data-action="rename-list">Rename</button></div>
           <button class="btn btn--block btn--danger" type="button" data-action="delete-list">Delete list</button>
         </article>
-        <article class="list-card">
-          <div class="list-card__head"><h3 class="list-card__name">Favorites</h3><span class="pill pill--grey">2 items</span></div>
-          <a class="btn btn--block" href="list-view.php">View / edit list</a>
-          <div class="rename-row"><input class="input" value="Favorites" aria-label="List name"><button class="btn" type="button" data-action="rename-list">Rename</button></div>
-          <button class="btn btn--block btn--danger" type="button" data-action="delete-list">Delete list</button>
-        </article>
       </div>
     </section>
     <template id="list-template">

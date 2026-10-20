@@ -16,17 +16,9 @@ require 'db.php';
 <body data-page="admin-login">
   <div class="auth-shell">
     <div class="auth-stage">
-    <header class="site-header">
-      <div class="brand">
-        <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
-        <div class="brand__text">
-          <h1 class="brand__title">Manila Science High School Online Library</h1>
-          <span class="role-badge">Admin</span>
-        </div>
-      </div>
-    </header>
       <main class="auth-body">
         <section class="auth-card auth-card--round" aria-labelledby="t">
+          <img class="auth-logo" src="assets/logo.webp" alt="Manila Science High School seal" width="84" height="84">
           <h2 class="card-title" id="t">Welcome back</h2>
           <p class="sub">Log in with your admin ID or username.</p>
           <div class="toast-region" data-toast-region aria-live="polite"></div>

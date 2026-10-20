@@ -5,10 +5,8 @@ require_once 'search_helpers.php';
 ensureCoverColumn($pdo);
 
 // Cover images for the books on this page, looked up by title
+// TODO (backend): map book title => cover_image for the books in this list.
 $coversByTitle = [];
-foreach ($pdo->query("SELECT title, cover_image FROM books WHERE cover_image IS NOT NULL AND cover_image <> ''")->fetchAll() as $row) {
-    $coversByTitle[$row['title']] = $row['cover_image'];
-}
 
 /** The .book-card__cover for a book: its cover image, or the paper placeholder. */
 function listCover(string $title, array $covers): string
@@ -46,6 +44,7 @@ function listCover(string $title, array $covers): string
         <a class="nav__link" href="my-lists.php">← My Lists</a>
         <a class="nav__link" href="library.php">Library</a>
         <a class="nav__link" href="profile.php">Profile</a>
+        <a class="nav__link" href="dashboard.php">Dashboard</a>
         <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
@@ -55,39 +54,11 @@ function listCover(string $title, array $covers): string
         <article class="book-card" data-title="Noli Me Tángere" data-copies="3" data-type="Book">
           <?= listCover('Noli Me Tángere', $coversByTitle) ?>
           <div class="book-card__body">
-            <div class="book-card__top"><span class="pill pill--blue">Book</span><span class="pill pill--ok">3 copies available</span></div>
-            <h3 class="book-card__title">Noli Me Tángere</h3>
-            <span class="book-card__author">José Rizal</span>
-            <span class="book-card__meta">January 1, 1887  ·  ISBN 978-971-27-1503-7  ·  Shelf A-12</span>
-            <div class="chips"><span class="chip chip--primary">Literature</span><span class="chip">classic</span><span class="chip">novel</span></div>
-          </div>
-          <div class="book-card__actions">
-            <button class="btn btn--block" type="button" data-action="borrow">Request to borrow</button>
-            <button class="btn btn--block btn--danger" type="button" data-action="remove-from-list">Remove from list</button>
-          </div>
-        </article>
-        <article class="book-card" data-title="Cosmos" data-copies="3" data-type="Book">
-          <?= listCover('Cosmos', $coversByTitle) ?>
-          <div class="book-card__body">
-            <div class="book-card__top"><span class="pill pill--blue">Book</span><span class="pill pill--ok">3 copies available</span></div>
-            <h3 class="book-card__title">Cosmos</h3>
-            <span class="book-card__author">Carl Sagan</span>
-            <span class="book-card__meta">January 1, 1980  ·  ISBN 978-0-345-53943-4  ·  Shelf C-04</span>
-            <div class="chips"><span class="chip chip--primary">Science</span><span class="chip">astronomy</span><span class="chip">classic</span></div>
-          </div>
-          <div class="book-card__actions">
-            <button class="btn btn--block" type="button" data-action="borrow">Request to borrow</button>
-            <button class="btn btn--block btn--danger" type="button" data-action="remove-from-list">Remove from list</button>
-          </div>
-        </article>
-        <article class="book-card" data-title="Catan" data-copies="3" data-type="Board Game">
-          <?= listCover('Catan', $coversByTitle) ?>
-          <div class="book-card__body">
-            <div class="book-card__top"><span class="pill pill--green">Board Game</span><span class="pill pill--ok">3 copies available</span></div>
-            <h3 class="book-card__title">Catan</h3>
-            <span class="book-card__author">Klaus Teuber</span>
-            <span class="book-card__meta">1995  ·  Shelf G-01</span>
-            <div class="chips"><span class="chip chip--primary">Games</span><span class="chip">strategy</span><span class="chip">trading</span></div>
+            <div class="book-card__top"><span class="pill pill--blue">Book</span><span class="pill pill--ok">copies available</span></div>
+            <h3 class="book-card__title">Book Title</h3>
+            <span class="book-card__author">Author</span>
+            <span class="book-card__meta">Publication Date  ·  ISBN  ·  Shelf Location</span>
+            <div class="chips"><span class="chip chip--primary">Classification</span><span class="chip">tag</span></div>
           </div>
           <div class="book-card__actions">
             <button class="btn btn--block" type="button" data-action="borrow">Request to borrow</button>

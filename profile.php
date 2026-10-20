@@ -1,5 +1,82 @@
 <?php
+session_start();
 require 'db.php';
+require_once 'search_helpers.php'; // h(), formatPublishedDate()
+
+const OVERDUE_FEE_PER_DAY = 5; // pesos
+
+// Same fallback library.php uses until real login sessions are in place
+$userId = $_SESSION['student_id'] ?? '2023-00123';
+
+/** Days past the due date x the daily fee (0 when not overdue). */
+function loanOverdueFee(string $dueDate): float
+{
+    $due   = new DateTime($dueDate);
+    $today = new DateTime('today');
+    if ($today <= $due) {
+        return 0.0;
+    }
+    return (int) $due->diff($today)->days * OVERDUE_FEE_PER_DAY;
+}
+
+/**
+ * Numbers behind the due-date progress bar: how far along the loan is,
+ * days left (negative once overdue) and a status bucket for the colour.
+ */
+function loanTrackerData(?string $borrowedAt, string $dueDate): array
+{
+    $due   = new DateTime($dueDate);
+    $today = new DateTime('today');
+    $start = new DateTime($borrowedAt ?: $dueDate);
+    $start->setTime(0, 0);
+
+    $totalDays   = max((int) $start->diff($due)->days, 1); // guard against same-day loans
+    $elapsedDays = $today < $start ? 0 : (int) $start->diff($today)->days;
+    $percent     = min(100, max(0, (int) round(($elapsedDays / $totalDays) * 100)));
+    $daysLeft    = (int) $today->diff($due)->format('%r%a');
+
+    $status = $daysLeft < 0 ? 'overdue' : ($daysLeft <= 2 ? 'due-soon' : 'on-track');
+
+    return ['percent' => $percent, 'days_left' => $daysLeft, 'status' => $status];
+}
+
+function loanDaysText(int $n): string
+{
+    return abs($n) . ' day' . (abs($n) === 1 ? '' : 's');
+}
+
+// Approved, not-yet-returned loans for this student
+// TODO (backend): approved, not-yet-returned loans for $userId, soonest due first.
+// Rows: title, authors, due_date, borrowed_at.
+$activeLoans = [];
+
+// Placeholder books so the tabs have something to show while there are no real loans.
+// Set to false (or delete this block) once real data is in the database.
+const SHOW_PLACEHOLDER_LOANS = true;
+if (SHOW_PLACEHOLDER_LOANS && empty($activeLoans)) {
+    // [title, authors, days until due (negative = overdue)]
+    $samples = [
+        ['Cosmos',                  'Carl Sagan',       4],
+        ['Noli Me Tángere',         'José Rizal',       1],
+        ['Catan',                   'Klaus Teuber',    -6],
+        ['A Brief History of Time', 'Stephen Hawking', -2],
+    ];
+    foreach ($samples as [$title, $authors, $daysUntilDue]) {
+        $due = new DateTime('today');
+        $due->modify(($daysUntilDue >= 0 ? '+' : '') . $daysUntilDue . ' days');
+        $borrowed = clone $due;
+        $borrowed->modify('-14 days');
+        $activeLoans[] = [
+            'title'       => $title,
+            'authors'     => $authors,
+            'due_date'    => $due->format('Y-m-d'),
+            'borrowed_at' => $borrowed->format('Y-m-d'),
+        ];
+    }
+}
+$overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
+    return loanOverdueFee((string) $loan['due_date']) > 0;
+}));
 ?>
 <!doctype html>
 <html lang="en">
@@ -27,6 +104,7 @@ require 'db.php';
       <nav class="nav" aria-label="Main">
         <a class="nav__link" href="library.php">← Back to library</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
+        <a class="nav__link" href="dashboard.php">Dashboard</a>
         <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>
@@ -83,19 +161,85 @@ require 'db.php';
     </section>
     <section class="stack" aria-labelledby="bh">
       <h2 class="sr-only" id="bh" style="position:absolute;left:-9999px">Borrowed books</h2>
-      <div class="tabs" role="tablist">
-        <button class="tab is-active" type="button" data-borrow-tab="current">Currently borrowed</button>
-        <button class="tab" type="button" data-borrow-tab="overdue">Overdue</button>
+      <div class="tabs loan-tabs" role="tablist">
+        <button class="tab is-active" type="button" role="tab" id="loan-tab-current" aria-selected="true" aria-controls="loan-panel-current" data-loan-tab="current">Borrowed books<span class="tab-count"><?= count($activeLoans) ?></span></button>
+        <button class="tab" type="button" role="tab" id="loan-tab-overdue" aria-selected="false" aria-controls="loan-panel-overdue" data-loan-tab="overdue">Overdue books<span class="tab-count"><?= count($overdueLoans) ?></span></button>
       </div>
-      <div class="panel" id="borrow-list">
-        <div class="borrow-list">
-          <div class="borrow-row"><p class="item">Cosmos — Carl Sagan</p><p class="due">Due October 20, 2026 · 4 days left</p></div>
-          <div class="borrow-row" data-overdue><p class="item">Catan — Klaus Teuber</p><p class="due due--late">Due October 14, 2026 · Overdue ₱10 (₱5/day)</p></div>
+
+      <div class="loan-list" id="loan-panel-current" role="tabpanel" aria-labelledby="loan-tab-current">
+<?php if (empty($activeLoans)): ?>
+        <p class="panel loan-empty">You don't have any books borrowed right now.</p>
+<?php else: foreach ($activeLoans as $loan):
+        $t         = loanTrackerData($loan['borrowed_at'] ?? null, (string) $loan['due_date']);
+        $fee       = loanOverdueFee((string) $loan['due_date']);
+        $authors   = implode(', ', array_map('trim', explode(',', (string) $loan['authors'])));
+?>
+        <div class="panel loan-card">
+          <div>
+            <div class="loan-title"><?= h($loan['title']) ?></div>
+            <div class="loan-author"><?= h($authors) ?></div>
+          </div>
+          <div>
+            <div class="loan-meta">
+              <span>Due <?= h(formatPublishedDate((string) $loan['due_date'])) ?></span>
+              <?php if ($fee > 0): ?><span class="loan-badge">Overdue — ₱<?= number_format($fee, 2) ?></span><?php endif; ?>
+            </div>
+            <div class="loan-bar" role="progressbar" aria-label="Loan progress" aria-valuenow="<?= $t['percent'] ?>" aria-valuemin="0" aria-valuemax="100">
+              <div class="loan-bar__fill loan-bar__fill--<?= h($t['status']) ?>" style="width:<?= $t['percent'] ?>%"></div>
+            </div>
+            <div class="loan-status loan-status--<?= h($t['status']) ?>">
+              <?php if ($t['days_left'] < 0): ?><?= loanDaysText($t['days_left']) ?> overdue
+              <?php elseif ($t['days_left'] === 0): ?>Due today
+              <?php else: ?><?= loanDaysText($t['days_left']) ?> left<?php endif; ?>
+            </div>
+          </div>
         </div>
+<?php endforeach; endif; ?>
+      </div>
+
+      <div class="loan-list" id="loan-panel-overdue" role="tabpanel" aria-labelledby="loan-tab-overdue" hidden>
+<?php if (empty($overdueLoans)): ?>
+        <p class="panel loan-empty">No overdue books. You're all caught up!</p>
+<?php else: foreach ($overdueLoans as $loan):
+        $fee     = loanOverdueFee((string) $loan['due_date']);
+        $t       = loanTrackerData($loan['borrowed_at'] ?? null, (string) $loan['due_date']);
+        $authors = implode(', ', array_map('trim', explode(',', (string) $loan['authors'])));
+?>
+        <div class="panel loan-card">
+          <div>
+            <div class="loan-title"><?= h($loan['title']) ?></div>
+            <div class="loan-author"><?= h($authors) ?></div>
+          </div>
+          <div class="loan-side--end">
+            <div class="loan-meta">
+              <span>Due <?= h(formatPublishedDate((string) $loan['due_date'])) ?></span>
+              <span class="loan-badge">Overdue — ₱<?= number_format($fee, 2) ?></span>
+            </div>
+            <div class="loan-status loan-status--overdue"><?= loanDaysText($t['days_left']) ?> overdue (₱<?= OVERDUE_FEE_PER_DAY ?>/day)</div>
+          </div>
+        </div>
+<?php endforeach; endif; ?>
       </div>
     </section>
   </div>
 
+  <script>
+    // Borrowed / overdue tabs
+    (function () {
+      var tabs = document.querySelectorAll('[data-loan-tab]');
+      function show(name) {
+        tabs.forEach(function (t) {
+          var on = t.getAttribute('data-loan-tab') === name;
+          t.classList.toggle('is-active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+        });
+      }
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { show(t.getAttribute('data-loan-tab')); });
+      });
+    })();
+  </script>
   <script>
     // Profile colour: one picker for solid, two for gradient
     (function () {

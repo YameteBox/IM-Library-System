@@ -16,21 +16,10 @@ require 'db.php';
 </head>
 <body data-page="register-student">
   <div class="page">
-    <header class="site-header">
-      <div class="brand">
-        <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
-        <div class="brand__text">
-          <h1 class="brand__title">Library Management — Admin #A-001</h1>
-          <span class="role-badge">admin</span>
-        </div>
-      </div>
-      <nav class="nav" aria-label="Main">
-        <a class="nav__link" href="admin-library.php">← Back to admin library</a>
-        <a class="nav__link" href="admin-login.php">Log out</a>
-      </nav>
-    </header>
     <main class="auth-body">
+      <a class="back-link" href="admin-library.php">← Back to admin library</a>
       <section class="auth-card auth-card--round" aria-labelledby="t">
+        <img class="auth-logo" src="assets/logo.webp" alt="Manila Science High School seal" width="84" height="84">
         <div id="register-view" class="form-stack">
           <h2 class="card-title" id="t">Register a New User</h2>
           <p class="sub">Create a user account on their behalf.</p>

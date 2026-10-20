@@ -29,17 +29,9 @@ require 'db.php';
 <body data-page="register">
   <div class="auth-shell">
     <div class="auth-stage">
-    <header class="site-header">
-      <div class="brand">
-        <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
-        <div class="brand__text">
-          <h1 class="brand__title">Library Management</h1>
-          
-        </div>
-      </div>
-    </header>
       <main class="auth-body">
         <section class="auth-card" aria-labelledby="t">
+          <img class="auth-logo" src="assets/logo.webp" alt="Manila Science High School seal" width="84" height="84">
           <div id="register-view" class="form-stack">
             <h2 class="card-title" id="t">Register an account</h2>
             <p class="sub">Books books books</p>

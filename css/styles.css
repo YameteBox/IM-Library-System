@@ -722,3 +722,118 @@ body.dark .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 .panel .user-card { box-shadow: none; }
 .page > .auth-body { padding-top: 0; }
 @media (max-width: 720px) { .wide-panel { padding: 20px; } }
+
+/* ---------- Chatbot launcher and window ---------- */
+
+.chatbot-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1000;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+  transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.chatbot-fab:hover { background: #1a52a3; transform: translateY(-2px); }
+.chatbot-fab:active { transform: translateY(0); }
+.chatbot-fab:focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 5px var(--blue); }
+.chatbot-fab svg { width: 28px; height: 28px; display: block; }
+.chatbot-fab .chatbot-fab__close { display: none; }
+.chatbot-fab[aria-expanded="true"] .chatbot-fab__open { display: none; }
+.chatbot-fab[aria-expanded="true"] .chatbot-fab__close { display: block; }
+
+.chatbot-window {
+  position: fixed;
+  right: 24px;
+  bottom: 98px;
+  z-index: 1000;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  height: 480px;
+  max-height: calc(100vh - 130px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  transform-origin: bottom right;
+  animation: chatbot-pop .18s ease-out;
+}
+.chatbot-window[hidden] { display: none; }
+@keyframes chatbot-pop {
+  from { opacity: 0; transform: translateY(8px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+.chatbot-window__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; background: var(--blue); color: #fff; }
+.chatbot-window__title { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+.chatbot-window__sub { margin: 2px 0 0; font-size: 12px; opacity: .85; }
+.chatbot-window__x { border: 0; background: transparent; color: inherit; font-size: 20px; line-height: 1; padding: 4px 8px; border-radius: 8px; cursor: pointer; }
+.chatbot-window__x:hover { background: rgba(255, 255, 255, .18); }
+.chatbot-window__x:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.chatbot-window__body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: var(--page); }
+.chatbot-msg { max-width: 85%; padding: 10px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; }
+.chatbot-msg--bot { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.chatbot-window__foot { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); background: var(--surface); }
+.chatbot-window__input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 999px; font: inherit; font-size: 14px; background: var(--page); color: var(--ink); }
+.chatbot-window__send { border: 0; border-radius: 999px; padding: 0 16px; background: var(--blue); color: #fff; font: inherit; font-size: 14px; font-weight: 600; }
+.chatbot-window__input:disabled, .chatbot-window__send:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 720px) {
+  .chatbot-fab { right: 16px; bottom: 16px; width: 54px; height: 54px; }
+  .chatbot-window { right: 16px; bottom: 84px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chatbot-fab, .chatbot-window { transition: none; animation: none; }
+}
+
+/* ---------- Carousel additions (arrows + keyboard focus) ---------- */
+
+.carousel { scroll-behavior: smooth; }
+.carousel:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 12px; }
+.carousel-arrows .icon-btn[hidden] { display: none; }
+.carousel-arrows .icon-btn:disabled { opacity: .4; cursor: default; }
+body.dark .icon-btn { background: var(--surface); }
+
+/* ---------- Profile: borrowed / overdue loan cards ---------- */
+
+.loan-tabs .tab-count { margin-left: 6px; font-size: 12px; opacity: .8; }
+.loan-list { display: flex; flex-direction: column; gap: 12px; }
+.loan-list[hidden] { display: none; }
+.loan-card { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: center; }
+.loan-title { font-weight: 600; }
+.loan-author { font-size: 13px; color: var(--muted); }
+.loan-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.loan-bar { height: 8px; border-radius: 999px; overflow: hidden; background: var(--line); }
+.loan-bar__fill { height: 100%; border-radius: 999px; background: var(--blue); }
+.loan-bar__fill--due-soon { background: var(--gold); }
+.loan-bar__fill--overdue { background: var(--red); }
+.loan-status { font-size: 13px; margin-top: 4px; color: var(--muted); }
+.loan-status--due-soon { color: #a87400; }
+.loan-status--overdue { color: var(--red); }
+body.dark .loan-status--due-soon { color: var(--gold); }
+body.dark .loan-status--overdue { color: #ff8a9a; }
+.loan-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--red); color: #fff; font-size: 12px; font-weight: 600; }
+.loan-side--end { text-align: right; }
+.loan-side--end .loan-meta { justify-content: flex-end; }
+.loan-empty { text-align: center; color: var(--muted); padding: 32px 12px; }
+@media (max-width: 720px) {
+  .loan-card { grid-template-columns: 1fr; }
+  .loan-side--end { text-align: left; }
+  .loan-side--end .loan-meta { justify-content: space-between; }
+}
+
+/* ---------- Logo at the top of login / register cards ---------- */
+
+.auth-logo { display: block; width: 84px; height: 84px; margin: 0 auto 4px; object-fit: contain; }

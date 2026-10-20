@@ -28,6 +28,7 @@ require 'db.php';
         <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
+        <a class="nav__link" href="dashboard.php">Dashboard</a>
         <a class="nav__link" href="login.php">Log out</a>
       </nav>
     </header>

@@ -61,32 +61,11 @@ function catalogFiltersActive(array $p): bool
 
 function searchCatalog(PDO $pdo, array $p): array
 {
-    $where  = [];
-    $params = [];
-
-    if ($p['q'] !== '') {
-        $columns = CATALOG_SEARCH_FIELDS[$p['field']]['columns'];
-        $parts   = [];
-        foreach ($columns as $column) {
-            $parts[]  = "CAST($column AS TEXT) ILIKE ?";
-            $params[] = likePattern($p['q']);
-        }
-        // Parenthesised so the ORs can't swallow the media type AND below
-        $where[] = '(' . implode(' OR ', $parts) . ')';
-    }
-
-    if ($p['type'] !== 'all') {
-        $where[]  = 'media_type = ?';
-        $params[] = $p['type'];
-    }
-
-    $sql = 'SELECT * FROM books'
-        . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
-        . ' ORDER BY title';
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll();
+    // TODO (backend): query the books table. Filters in $p: 'q' (text), 'field' (a key of
+    // CATALOG_SEARCH_FIELDS), 'type' ('all' or a MEDIA_TYPES key). Match with likePattern($p['q']),
+    // order by title. Return a list of book rows (id, title, authors, isbn, published_date,
+    // shelf_number, key_word, classification, media_type, copies_available, cover_image).
+    return [];
 }
 
 /** <option> list for the media type filter. */
@@ -115,47 +94,18 @@ function searchFieldOptions(string $selected): string
 
 function searchUsers(PDO $pdo, string $q, int $limit = 50): array
 {
-    $sql    = 'SELECT * FROM users';
-    $params = [];
-
-    if ($q !== '') {
-        $sql .= ' WHERE (CAST(username AS TEXT) ILIKE ?
-                      OR CAST(email AS TEXT) ILIKE ?
-                      OR CAST(student_id AS TEXT) ILIKE ?)';
-        $like   = likePattern($q);
-        $params = [$like, $like, $like];
-    }
-
-    $sql .= ' ORDER BY username LIMIT ' . max(1, $limit);
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll();
+    // TODO (backend): query the users table by username, email or student_id (use likePattern($q)
+    // when $q is not empty), order by username, limit $limit. Return a list of user rows.
+    return [];
 }
 
 /** Approved, not-yet-returned loans for the given student numbers, keyed by student number. */
 function currentlyBorrowedByUsers(PDO $pdo, array $studentIds): array
 {
-    if (empty($studentIds)) {
-        return [];
-    }
-
-    $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
-    $stmt = $pdo->prepare(
-        "SELECT loans.user_id, loans.due_date, books.title, books.authors
-         FROM loans
-         INNER JOIN books ON loans.book_id = books.id
-         WHERE loans.returned_at IS NULL AND loans.status = 'approved'
-           AND CAST(loans.user_id AS TEXT) IN ($placeholders)
-         ORDER BY loans.due_date ASC"
-    );
-    $stmt->execute(array_map('strval', array_values($studentIds)));
-
-    $byUser = [];
-    foreach ($stmt->fetchAll() as $row) {
-        $byUser[(string) $row['user_id']][] = $row;
-    }
-    return $byUser;
+    // TODO (backend): fetch approved, not-yet-returned loans (with book title and authors) for
+    // these student numbers. Return them grouped by student number:
+    // [ '2023-00123' => [ ['title' => ..., 'authors' => ..., 'due_date' => ...], ... ], ... ]
+    return [];
 }
 
 function userInitials(string $username): string
@@ -212,14 +162,7 @@ const COVER_MAX_BYTES  = 2 * 1024 * 1024; // 2 MB
 /** Adds books.cover_image the first time it is needed (see add_cover_image.sql). */
 function ensureCoverColumn(PDO $pdo): void
 {
-    $exists = $pdo->query(
-        "SELECT 1 FROM information_schema.columns
-         WHERE table_schema = current_schema() AND table_name = 'books' AND column_name = 'cover_image'"
-    )->fetchColumn();
-
-    if (!$exists) {
-        $pdo->exec('ALTER TABLE books ADD COLUMN cover_image TEXT');
-    }
+    // TODO (backend): make sure books.cover_image exists (no-op once the column is in the schema).
 }
 
 /**
