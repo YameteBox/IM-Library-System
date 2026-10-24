@@ -105,7 +105,7 @@ $overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
         <a class="nav__link" href="library.php">← Back to library</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="dashboard.php">Dashboard</a>
-        <a class="nav__link" href="login.php">Log out</a>
+        <a class="nav__link" href="logout.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>

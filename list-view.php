@@ -45,7 +45,7 @@ function listCover(string $title, array $covers): string
         <a class="nav__link" href="library.php">Library</a>
         <a class="nav__link" href="profile.php">Profile</a>
         <a class="nav__link" href="dashboard.php">Dashboard</a>
-        <a class="nav__link" href="login.php">Log out</a>
+        <a class="nav__link" href="logout.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>

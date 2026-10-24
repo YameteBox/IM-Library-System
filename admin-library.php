@@ -1,5 +1,12 @@
 <?php
 session_start();
+
+// Admins only
+if (empty($_SESSION['admin_id'])) {
+    header('Location: admin-login.php');
+    exit;
+}
+
 require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
@@ -254,7 +261,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         <a class="nav__link" href="admin-events.php">Calendar Events</a>
         <a class="nav__link" href="suspend-user.php">Suspend / Unsuspend User</a>
         <a class="nav__link" href="admin-profile.php">Profile</a>
-        <a class="nav__link" href="admin-login.php">Log out</a>
+        <a class="nav__link" href="admin-logout.php">Log out</a>
       </nav>
     </header>
     <nav class="tabs" role="tablist" aria-label="Admin sections"><a class="tab is-active" href="#catalog" role="tab" data-tab="catalog" aria-selected="true" aria-current="page">Catalog</a><a class="tab" href="#requests" role="tab" data-tab="requests" aria-selected="false">Pending requests</a><a class="tab" href="#loan" role="tab" data-tab="loan" aria-selected="false">On loan</a></nav>

@@ -31,7 +31,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
       </div>
       <nav class="nav" aria-label="Main">
         <a class="nav__link" href="admin-library.php">← Back to admin library</a>
-        <a class="nav__link" href="admin-login.php">Log out</a>
+        <a class="nav__link" href="admin-logout.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>

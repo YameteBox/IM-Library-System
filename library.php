@@ -62,7 +62,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
         <a class="nav__link" href="dashboard.php">Dashboard</a>
-        <a class="nav__link" href="login.php">Log out</a>
+        <a class="nav__link" href="logout.php">Log out</a>
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>

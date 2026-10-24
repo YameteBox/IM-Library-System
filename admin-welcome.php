@@ -1,5 +1,14 @@
 <?php
+session_start();
 require 'db.php';
+
+// Must be logged in as an admin; admin-logout.php destroys this session
+if (empty($_SESSION['admin_id'])) {
+    header('Location: admin-login.php');
+    exit;
+}
+$adminName   = (string) ($_SESSION['admin_name'] ?? 'librarian');
+$adminNumber = (string) ($_SESSION['admin_number'] ?? '');
 ?>
 <!doctype html>
 <html lang="en">
@@ -20,19 +29,19 @@ require 'db.php';
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">Library Management — Admin #A-001</h1>
+          <h1 class="brand__title">Library Management — Admin #<?= htmlspecialchars($adminNumber, ENT_QUOTES, 'UTF-8') ?></h1>
           
         </div>
       </div>
     </header>
       <main class="auth-body">
         <section class="auth-card" aria-labelledby="t">
-          <h2 class="card-title" id="t">You're logged in, librarian!</h2>
+          <h2 class="card-title" id="t">You're logged in, <?= htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8') ?>!</h2>
           <p class="sub">Welcome back.</p>
           <div><span class="pill pill--blue">admin</span></div>
           <div class="btn-row">
             <a class="btn btn--round" href="admin-library.php">Browse the library</a>
-            <a class="btn btn--round btn--danger" href="admin-login.php">Log out</a>
+            <a class="btn btn--round btn--danger" href="admin-logout.php">Log out</a>
           </div>
         </section>
       </main>

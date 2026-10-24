@@ -17,7 +17,7 @@ if (PHP_SAPI !== 'cli') {
 
 require __DIR__ . '/db.php';   // provides $pdo
 
-$adminNumber = $argv[1] ?? 'A-001';
+$adminNumber = $argv[1] ?? '202515123';
 $username    = strtolower($argv[2] ?? 'admin');
 $email       = $argv[3] ?? 'admin@example.com';
 $password    = $argv[4] ?? 'password';

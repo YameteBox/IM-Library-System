@@ -29,7 +29,7 @@ require 'db.php';
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
         <a class="nav__link" href="dashboard.php">Dashboard</a>
-        <a class="nav__link" href="login.php">Log out</a>
+        <a class="nav__link" href="logout.php">Log out</a>
       </nav>
     </header>
     <a class="back-link" href="library.php">← Back to library</a>

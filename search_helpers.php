@@ -61,11 +61,36 @@ function catalogFiltersActive(array $p): bool
 
 function searchCatalog(PDO $pdo, array $p): array
 {
-    // TODO (backend): query the books table. Filters in $p: 'q' (text), 'field' (a key of
-    // CATALOG_SEARCH_FIELDS), 'type' ('all' or a MEDIA_TYPES key). Match with likePattern($p['q']),
-    // order by title. Return a list of book rows (id, title, authors, isbn, published_date,
-    // shelf_number, key_word, classification, media_type, copies_available, cover_image).
-    return [];
+    $where  = [];
+    $params = [];
+
+    if ($p['type'] !== 'all') {
+        $where[]          = 'media_type = :type';
+        $params[':type']  = $p['type'];
+    }
+
+    if ($p['q'] !== '') {
+        // Column names come from the CATALOG_SEARCH_FIELDS constant, never from the request.
+        $columns = CATALOG_SEARCH_FIELDS[$p['field']]['columns'];
+        $like    = likePattern($p['q']);
+        $parts   = [];
+        foreach ($columns as $i => $col) {
+            // One placeholder per column: PDO can't reliably reuse a named placeholder
+            $parts[]              = $col . ' ILIKE :q' . $i;
+            $params[':q' . $i]    = $like;
+        }
+        $where[] = '(' . implode(' OR ', $parts) . ')';
+    }
+
+    $sql = 'SELECT id, title, authors, isbn, published_date, shelf_number, key_word,
+                   classification, media_type, copies_available, cover_image
+              FROM books'
+         . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
+         . ' ORDER BY title, id';
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /** <option> list for the media type filter. */

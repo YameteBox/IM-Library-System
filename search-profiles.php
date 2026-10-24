@@ -33,7 +33,7 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
         <a class="nav__link" href="library.php">← Back to library</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
-        <a class="nav__link" href="login.php">Log out</a>
+        <a class="nav__link" href="logout.php">Log out</a>
       </nav>
     </header>
     <form class="plain-search" id="profile-search" role="search" method="get" action="search-profiles.php" data-server-search>
