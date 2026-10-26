@@ -114,6 +114,195 @@ function searchFieldOptions(string $selected): string
 }
 
 // ---------------------------------------------------------------------------
+// Advanced catalog search (advanced-search.php)
+// ---------------------------------------------------------------------------
+
+/** Classifications a catalog item can have (same list admin-library.php uses). */
+const CATALOG_CLASSIFICATIONS = [
+    'General Works, Computer Science, and Information',
+    'Philosophy and Psychology',
+    'Religion',
+    'Social Sciences',
+    'Language',
+    'Science',
+    'Technology',
+    'Arts and Recreation',
+    'Literature',
+    'History and Geography',
+];
+
+const ADVANCED_AVAILABILITY = [
+    'any'         => 'Any availability',
+    'available'   => 'Available now',
+    'unavailable' => 'Unavailable',
+];
+
+const ADVANCED_SORTS = [
+    'relevance' => 'Relevance',
+    'title'     => 'Title',
+    'author'    => 'Author',
+    'newest'    => 'Newest first',
+];
+
+/** Read the advanced-search form from a request array, falling back to safe defaults. */
+function advancedSearchParams(array $src): array
+{
+    $text = function (string $key, int $max) use ($src): string {
+        $v = $src[$key] ?? '';
+        return is_string($v) ? mb_substr(trim($v), 0, $max) : '';
+    };
+    // A year is 1-9999 or empty
+    $year = function (string $key) use ($src): string {
+        $v = $src[$key] ?? '';
+        if (!is_string($v) || !preg_match('/^\d{1,4}$/', trim($v)) || (int) trim($v) < 1) {
+            return '';
+        }
+        return (string) (int) trim($v);
+    };
+
+    $class = $text('classification', 100);
+    if (!in_array($class, CATALOG_CLASSIFICATIONS, true)) {
+        $class = '';
+    }
+    $availability = $src['availability'] ?? 'any';
+    if (!is_string($availability) || !isset(ADVANCED_AVAILABILITY[$availability])) {
+        $availability = 'any';
+    }
+    $sort = $src['sort'] ?? 'relevance';
+    if (!is_string($sort) || !isset(ADVANCED_SORTS[$sort])) {
+        $sort = 'relevance';
+    }
+
+    $from = $year('from');
+    $to   = $year('to');
+    if ($from !== '' && $to !== '' && (int) $from > (int) $to) {
+        [$from, $to] = [$to, $from]; // a backwards range still finds something
+    }
+
+    return [
+        'tags'           => $text('tags', 200),
+        'title'          => $text('title', 255),
+        'author'         => $text('author', 255),
+        'isbn'           => $text('isbn', 20),
+        'type'           => sanitizeMediaTypeFilter($src['type'] ?? 'all'),
+        'classification' => $class,
+        'from'           => $from,
+        'to'             => $to,
+        'availability'   => $availability,
+        'shelf'          => $text('shelf', 20),
+        'sort'           => $sort,
+    ];
+}
+
+/** True when at least one search criterion was filled in (sorting alone does not count). */
+function advancedFiltersActive(array $p): bool
+{
+    foreach (['tags', 'title', 'author', 'isbn', 'classification', 'from', 'to', 'shelf'] as $key) {
+        if ($p[$key] !== '') {
+            return true;
+        }
+    }
+    return $p['type'] !== 'all' || $p['availability'] !== 'any';
+}
+
+function searchCatalogAdvanced(PDO $pdo, array $p): array
+{
+    $where  = [];
+    $params = [];
+
+    if ($p['title'] !== '') {
+        $where[]          = 'title ILIKE :title';
+        $params[':title'] = likePattern($p['title']);
+    }
+    if ($p['author'] !== '') {
+        $where[]           = 'authors ILIKE :author';
+        $params[':author'] = likePattern($p['author']);
+    }
+    if ($p['isbn'] !== '') {
+        // Match with or without hyphens/spaces, e.g. 9780345539434 finds 978-0-345-53943-4
+        $where[]         = "REPLACE(REPLACE(isbn, '-', ''), ' ', '') ILIKE :isbn";
+        $params[':isbn'] = likePattern(str_replace(['-', ' '], '', $p['isbn']));
+    }
+    if ($p['shelf'] !== '') {
+        $where[]          = 'shelf_number ILIKE :shelf';
+        $params[':shelf'] = likePattern($p['shelf']);
+    }
+    if ($p['type'] !== 'all') {
+        $where[]         = 'media_type = :type';
+        $params[':type'] = $p['type'];
+    }
+    if ($p['classification'] !== '') {
+        $where[]          = 'classification = :class';
+        $params[':class'] = $p['classification'];
+    }
+
+    // Tags: comma-separated; every tag has to appear in the item's key words
+    if ($p['tags'] !== '') {
+        $tags = array_values(array_filter(array_map('trim', explode(',', $p['tags'])), 'strlen'));
+        foreach ($tags as $i => $tag) {
+            $where[]             = 'key_word ILIKE :tag' . $i;
+            $params[':tag' . $i] = likePattern($tag);
+        }
+    }
+
+    // Published year range (inclusive)
+    if ($p['from'] !== '') {
+        $where[]          = 'published_date >= :from_date';
+        $params[':from_date'] = sprintf('%04d-01-01', (int) $p['from']);
+    }
+    if ($p['to'] !== '') {
+        $where[]            = 'published_date <= :to_date';
+        $params[':to_date'] = sprintf('%04d-12-31', (int) $p['to']);
+    }
+
+    if ($p['availability'] === 'available') {
+        $where[] = 'COALESCE(copies_available, 0) > 0';
+    } elseif ($p['availability'] === 'unavailable') {
+        $where[] = 'COALESCE(copies_available, 0) <= 0';
+    }
+
+    switch ($p['sort']) {
+        case 'title':
+            $order = 'title, id';
+            break;
+        case 'author':
+            $order = 'authors, title, id';
+            break;
+        case 'newest':
+            $order = 'published_date DESC NULLS LAST, title, id';
+            break;
+        default: // relevance: exact title match first, then titles that start with the search
+            if ($p['title'] !== '') {
+                $order = '(LOWER(title) = LOWER(:ord_exact)) DESC, (title ILIKE :ord_prefix) DESC, title, id';
+                $params[':ord_exact']  = $p['title'];
+                $params[':ord_prefix'] = addcslashes($p['title'], '%_\\') . '%';
+            } else {
+                $order = 'title, id';
+            }
+    }
+
+    $sql = 'SELECT id, title, authors, isbn, published_date, shelf_number, key_word,
+                   classification, media_type, copies_available, cover_image
+              FROM books'
+         . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
+         . ' ORDER BY ' . $order;
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** <option> list for a fixed key => label map. */
+function simpleOptions(array $options, string $selected): string
+{
+    $html = '';
+    foreach ($options as $key => $label) {
+        $html .= '<option value="' . h($key) . '"' . ($selected === (string) $key ? ' selected' : '') . '>' . h($label) . '</option>';
+    }
+    return $html;
+}
+
+// ---------------------------------------------------------------------------
 // User search (username, email or student number)
 // ---------------------------------------------------------------------------
 

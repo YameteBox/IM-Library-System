@@ -1,5 +1,12 @@
 <?php
 session_start();
+
+// Admins only (same check as admin-library.php), now that this page writes to the database
+if (empty($_SESSION['admin_id'])) {
+    header('Location: admin-login.php');
+    exit;
+}
+
 require 'db.php';
 require_once 'search_helpers.php'; // h(), formatPublishedDate()
 require_once 'events_helpers.php';
@@ -25,30 +32,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $goto = $self . '&edit=' . $eventId;
             }
         } elseif ($action === 'add_event') {
-            // TODO (backend): insert the event from $data (title, description, event_date, event_time)
-            $flash = 'Added "' . $data['title'] . '".';
-            $type  = 'success';
-            // Show the month the new event landed in
-            $goto = 'admin-events.php?month=' . substr($data['event_date'], 0, 7);
-        } else {
-            // TODO (backend): update event $eventId from $data; set $updated = false if no row matched
-            $updated = true;
-            if (!$updated) {
-                $flash = 'That event could not be found.';
-            } else {
-                $flash = 'Updated "' . $data['title'] . '".';
+            try {
+                addEvent($pdo, $data);
+                $flash = 'Added "' . $data['title'] . '".';
                 $type  = 'success';
-                $goto  = 'admin-events.php?month=' . substr($data['event_date'], 0, 7);
+                // Show the month the new event landed in
+                $goto = 'admin-events.php?month=' . substr($data['event_date'], 0, 7);
+            } catch (PDOException $e) {
+                $flash = 'Something went wrong adding the event. Please try again.';
+            }
+        } else {
+            try {
+                $updated = updateEvent($pdo, $eventId, $data);
+                if (!$updated) {
+                    $flash = 'That event could not be found.';
+                } else {
+                    $flash = 'Updated "' . $data['title'] . '".';
+                    $type  = 'success';
+                    $goto  = 'admin-events.php?month=' . substr($data['event_date'], 0, 7);
+                }
+            } catch (PDOException $e) {
+                $flash = 'Something went wrong updating the event. Please try again.';
             }
         }
     } elseif ($action === 'delete_event') {
-        // TODO (backend): delete event $eventId; set $deleted = false if no row matched
-        $deleted = true;
-        if (!$deleted) {
-            $flash = 'That event could not be found.';
-        } else {
-            $flash = 'Event removed.';
-            $type  = 'success';
+        try {
+            $deleted = deleteEvent($pdo, $eventId);
+            if (!$deleted) {
+                $flash = 'That event could not be found.';
+            } else {
+                $flash = 'Event removed.';
+                $type  = 'success';
+            }
+        } catch (PDOException $e) {
+            $flash = 'Something went wrong removing the event. Please try again.';
         }
     }
 
@@ -71,7 +88,7 @@ if (isset($_SESSION['flash_message'])) {
 // Event being edited (if any)
 $editing = null;
 if (isset($_GET['edit'])) {
-    // TODO (backend): load the event with id (int) $_GET['edit'] into $editing (id, title, description, event_date, event_time), or leave null
+    $editing = findEvent($pdo, (int) $_GET['edit']);
 }
 
 $events = eventsForMonth($pdo, $month);

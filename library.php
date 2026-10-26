@@ -46,6 +46,13 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/sidebar.css">
+  <style>
+    /* New books: the whole card is clickable (stretched title link) and runs a search for that book */
+    .mini-card { position: relative; cursor: pointer; }
+    .mini-card__link { color: inherit; text-decoration: none; }
+    .mini-card__link::after { content: ""; position: absolute; inset: 0; }
+    .mini-card:hover .mini-card__link, .mini-card__link:focus-visible { text-decoration: underline; }
+  </style>
 </head>
 <body data-page="library">
   <div class="page">
@@ -89,7 +96,8 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
         <div class="carousel" id="new-books" role="region" aria-roledescription="carousel" aria-label="New books" tabindex="0">
           <?php foreach ($newBooks as $newBook): ?>
-          <article class="mini-card"><div class="mini-card__cover<?= !empty($newBook['cover_image']) ? ' has-cover' : '' ?>" role="img" aria-label="<?= empty($newBook['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($newBook['title']) ?>"><?= coverImgHtml($newBook['cover_image'] ?? null) ?></div><h3 class="mini-card__title"><?= h($newBook['title']) ?></h3><p class="mini-card__author"><?= h($newBook['authors']) ?></p></article>
+          <?php $newBookSearch = 'library.php?' . http_build_query(['q' => $newBook['title'], 'field' => 'title', 'type' => 'all']); ?>
+          <article class="mini-card"><div class="mini-card__cover<?= !empty($newBook['cover_image']) ? ' has-cover' : '' ?>" role="img" aria-label="<?= empty($newBook['cover_image']) ? 'Cover placeholder for ' : 'Cover of ' ?><?= h($newBook['title']) ?>"><?= coverImgHtml($newBook['cover_image'] ?? null) ?></div><h3 class="mini-card__title"><a class="mini-card__link" href="<?= h($newBookSearch) ?>" title="Search for this book"><?= h($newBook['title']) ?></a></h3><p class="mini-card__author"><?= h($newBook['authors']) ?></p></article>
           <?php endforeach; ?>
         </div>
       </section>

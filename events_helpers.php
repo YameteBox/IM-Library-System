@@ -10,7 +10,17 @@ const EVENT_DESC_MAX  = 1000;
 /** Creates the events table the first time it is needed. */
 function ensureEventsTable(PDO $pdo): void
 {
-    // TODO (backend): events table: id, title, description (nullable), event_date, event_time (nullable).
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS events (
+            id          SERIAL PRIMARY KEY,
+            title       VARCHAR(' . EVENT_TITLE_MAX . ') NOT NULL,
+            description TEXT,
+            event_date  DATE NOT NULL,
+            event_time  TIME,
+            created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+        )'
+    );
+    $pdo->exec('CREATE INDEX IF NOT EXISTS events_event_date_idx ON events (event_date)');
 }
 
 /** First day of the month named by ?month=YYYY-MM (defaults to the current month). */
@@ -24,15 +34,84 @@ function calendarMonth($value): DateTime
 
 function eventsForMonth(PDO $pdo, DateTime $first): array
 {
-    // TODO (backend): events whose event_date falls in the month starting at $first,
-    // ordered by date, time, title. Rows: id, title, description, event_date, event_time.
-    return [];
+    $start = (clone $first)->modify('first day of this month')->format('Y-m-d');
+    $end   = (clone $first)->modify('first day of next month')->format('Y-m-d');
+
+    $stmt = $pdo->prepare(
+        'SELECT id, title, description, event_date, event_time
+           FROM events
+          WHERE event_date >= :start AND event_date < :end
+          ORDER BY event_date, event_time NULLS FIRST, title'
+    );
+    $stmt->execute([':start' => $start, ':end' => $end]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function upcomingEvents(PDO $pdo, int $limit = 5): array
 {
-    // TODO (backend): the next $limit events from today on, ordered by date, time, title.
-    return [];
+    $stmt = $pdo->prepare(
+        'SELECT id, title, description, event_date, event_time
+           FROM events
+          WHERE event_date >= :today
+          ORDER BY event_date, event_time NULLS FIRST, title
+          LIMIT :lim'
+    );
+    $stmt->bindValue(':today', date('Y-m-d'));
+    $stmt->bindValue(':lim', max(1, $limit), PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/** One event by id, or null when it does not exist. */
+function findEvent(PDO $pdo, int $id): ?array
+{
+    $stmt = $pdo->prepare(
+        'SELECT id, title, description, event_date, event_time FROM events WHERE id = :id'
+    );
+    $stmt->execute([':id' => $id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/** Insert an event from validateEventInput() data. */
+function addEvent(PDO $pdo, array $data): void
+{
+    $pdo->prepare(
+        'INSERT INTO events (title, description, event_date, event_time)
+         VALUES (:title, :description, :event_date, :event_time)'
+    )->execute([
+        ':title'       => $data['title'],
+        ':description' => $data['description'],
+        ':event_date'  => $data['event_date'],
+        ':event_time'  => $data['event_time'],
+    ]);
+}
+
+/** Update an event; false when no row matched. */
+function updateEvent(PDO $pdo, int $id, array $data): bool
+{
+    $stmt = $pdo->prepare(
+        'UPDATE events
+            SET title = :title, description = :description,
+                event_date = :event_date, event_time = :event_time
+          WHERE id = :id'
+    );
+    $stmt->execute([
+        ':title'       => $data['title'],
+        ':description' => $data['description'],
+        ':event_date'  => $data['event_date'],
+        ':event_time'  => $data['event_time'],
+        ':id'          => $id,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+/** Delete an event; false when no row matched. */
+function deleteEvent(PDO $pdo, int $id): bool
+{
+    $stmt = $pdo->prepare('DELETE FROM events WHERE id = :id');
+    $stmt->execute([':id' => $id]);
+    return $stmt->rowCount() > 0;
 }
 
 /**
