@@ -3,6 +3,7 @@ session_start();
 require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
+require_once 'notifications_helpers.php';
 
 // Must be logged in (login.php sets these session values)
 if (empty($_SESSION['user_id'])) {
@@ -12,6 +13,8 @@ if (empty($_SESSION['user_id'])) {
 $userId        = (int) $_SESSION['user_id'];
 $studentNumber = $_SESSION['student_number'] ?? '';
 $username      = $_SESSION['username'] ?? $studentNumber;
+
+$isBanned = userIsBanned($pdo, $userId); // banned students can browse but not request to borrow
 
 $search = catalogSearchParams($_GET);
 $books  = searchCatalog($pdo, $search);
@@ -33,6 +36,10 @@ $newBooks = $pdo->query(
 $stmt = $pdo->prepare('SELECT id, name FROM lists WHERE user_id = :uid ORDER BY name');
 $stmt->execute([':uid' => $userId]);
 $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Notifications for the bell, and the books this student asked to be told about
+$notifications  = notificationData($pdo, $userId);
+$watchedBookIds = $notifications['watched'];
 ?>
 <!doctype html>
 <html lang="en">
@@ -52,6 +59,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
     .mini-card__link { color: inherit; text-decoration: none; }
     .mini-card__link::after { content: ""; position: absolute; inset: 0; }
     .mini-card:hover .mini-card__link, .mini-card__link:focus-visible { text-decoration: underline; }
+<?= notificationStyles() ?>
   </style>
 </head>
 <body data-page="library">
@@ -65,6 +73,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
       </div>
       <nav class="nav" aria-label="Main">
+<?= notificationBellHtml($notifications['items']) ?>
         <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
@@ -73,6 +82,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>
+    <?php if ($isBanned): ?><?= bannedNoticeHtml() ?><?php endif; ?>
     <main style="display:contents">
       <section class="hero" aria-label="Search the library">
         <h2 class="hero__eyebrow">MANILA SCIENCE HIGH SCHOOL ONLINE LIBRARY</h2>
@@ -117,6 +127,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $keywords   = array_filter(array_map('trim', explode(',', (string) ($book['key_word'] ?? ''))));
             $isPending  = in_array($bookId, $pendingBookIds, true);
             $meta       = [formatPublishedDate((string) $book['published_date'])];
+            if (!empty($book['accession_number'])) { $meta[] = 'Accession ' . $book['accession_number']; }
             if (!empty($book['isbn']))         { $meta[] = 'ISBN ' . $book['isbn']; }
             if (!empty($book['shelf_number'])) { $meta[] = 'Shelf ' . $book['shelf_number']; }
           ?>
@@ -140,7 +151,8 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
           </div>
           <div class="book-card__actions">
-            <button class="btn btn--block<?= $isPending ? ' is-disabled' : '' ?>" type="button" data-action="borrow"><?= $isPending ? 'Borrow request pending' : 'Request to borrow' ?></button>
+            <?= borrowButtonHtml($isBanned, $isPending) ?>
+            <?php if ($copiesLeft <= 0 && !$isBanned): ?><?= watchButtonHtml($bookId, in_array($bookId, $watchedBookIds, true)) ?><?php endif; ?>
             <div class="add-row">
               <select class="select" aria-label="Select list"><option value="">Select list</option><?php foreach ($userLists as $list): ?><option value="<?= (int) $list['id'] ?>"><?= h($list['name']) ?></option><?php endforeach; ?></select>
               <button class="btn btn--outline" type="button" data-action="add-to-list">Add to list</button>
@@ -242,6 +254,9 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
     })();
   </script>
 
+  <script>
+<?= notificationScript() ?>
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>
   <script src="js/server-search.js"></script>

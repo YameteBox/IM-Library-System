@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $stmt = $pdo->prepare(
-                'SELECT u.id, u.student_number, u.password_hash, u.banned, d.username
+                'SELECT u.id, u.student_number, u.password_hash, d.username
                    FROM users u
                    LEFT JOIN user_details d ON d.id = u.id
                   WHERE u.student_number = :sn'
@@ -29,9 +29,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (!$user || !password_verify($password, $user['password_hash'])) {
                 $error = 'Invalid username/student ID or password.';
-            } elseif ($user['banned']) {
-                $error = 'User has been banned.';
             } else {
+                // Banned students can still log in; they just can't request to borrow
+                // (see userIsBanned() in search_helpers.php).
                 session_regenerate_id(true);
                 $_SESSION['user_id']        = (int) $user['id'];
                 $_SESSION['student_number'] = $user['student_number'];

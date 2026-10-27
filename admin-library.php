@@ -11,6 +11,7 @@ require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
 ensureCoverColumn($pdo);
+ensureAccessionColumn($pdo); // every new item gets its accession number from the database
 
 /** Valid = a real calendar date strictly before today (matches the date picker's max). */
 function isValidPastDate(string $date): bool
@@ -144,14 +145,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $flashType    = 'error';
             } else {
                 try {
-                    $pdo->prepare(
+                    $insert = $pdo->prepare(
                         'INSERT INTO books
                             (title, authors, media_type, isbn, published_date, classification,
                              key_word, shelf_number, cover_image, total_copies, copies_available)
                          VALUES
                             (:title, :authors, :type, :isbn, :pub, :class,
-                             :keys, :shelf, :cover, :copies, :copies)'
-                    )->execute([
+                             :keys, :shelf, :cover, :copies, :copies)
+                         RETURNING accession_number'
+                    );
+                    $insert->execute([
                         ':title'   => $newTitle,
                         ':authors' => $newAuthors,
                         ':type'    => $newType,
@@ -163,7 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ':cover'   => $newCover,
                         ':copies'  => $newCopies,
                     ]);
-                    $flashMessage = 'Added "' . $newTitle . '" to the catalog.';
+                    $accession    = (string) $insert->fetchColumn();
+                    $flashMessage = 'Added "' . $newTitle . '" to the catalog (accession ' . $accession . ').';
                     $flashType    = 'success';
                 } catch (PDOException $e) {
                     if ($newCover !== null) {
@@ -361,6 +365,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           $keywords    = array_filter(array_map('trim', explode(',', (string) ($book['key_word'] ?? ''))));
           $bookHistory = $loanHistoryByBook[$book['id']] ?? [];
           $meta        = [formatPublishedDate((string) $book['published_date'])];
+          if (!empty($book['accession_number'])) { $meta[] = 'Accession ' . $book['accession_number']; }
           if (!empty($book['isbn']))         { $meta[] = 'ISBN ' . $book['isbn']; }
           if (!empty($book['shelf_number'])) { $meta[] = 'Shelf ' . $book['shelf_number']; }
         ?>

@@ -13,6 +13,8 @@ $userId        = (int) $_SESSION['user_id'];
 $studentNumber = $_SESSION['student_number'] ?? '';
 $username      = $_SESSION['username'] ?? $studentNumber;
 
+$isBanned  = userIsBanned($pdo, $userId); // banned students can browse but not request to borrow
+
 $search    = advancedSearchParams($_GET);
 $submitted = !empty($_GET);
 $active    = advancedFiltersActive($search);
@@ -63,6 +65,9 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </nav>
     </header>
     <div class="toast-region" data-toast-region aria-live="polite"></div>
+<?php if ($isBanned): ?>
+    <?= bannedNoticeHtml() ?>
+<?php endif; ?>
     <a class="back-link" href="library.php">← Back to library</a>
     <h2 class="section-title">Advanced search</h2>
     <form class="panel panel--lg form-stack" id="advanced-form" method="get" action="advanced-search.php">
@@ -143,6 +148,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $keywords   = array_filter(array_map('trim', explode(',', (string) ($book['key_word'] ?? ''))));
             $isPending  = in_array($bookId, $pendingBookIds, true);
             $meta       = [formatPublishedDate((string) $book['published_date'])];
+            if (!empty($book['accession_number'])) { $meta[] = 'Accession ' . $book['accession_number']; }
             if (!empty($book['isbn']))         { $meta[] = 'ISBN ' . $book['isbn']; }
             if (!empty($book['shelf_number'])) { $meta[] = 'Shelf ' . $book['shelf_number']; }
 ?>
@@ -166,7 +172,7 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
           </div>
           <div class="book-card__actions">
-            <button class="btn btn--block<?= $isPending ? ' is-disabled' : '' ?>" type="button" data-action="borrow"><?= $isPending ? 'Borrow request pending' : 'Request to borrow' ?></button>
+            <?= borrowButtonHtml($isBanned, $isPending) ?>
             <div class="add-row">
               <select class="select" aria-label="Select list"><option value="">Select list</option><?php foreach ($userLists as $list): ?><option value="<?= (int) $list['id'] ?>"><?= h($list['name']) ?></option><?php endforeach; ?></select>
               <button class="btn btn--outline" type="button" data-action="add-to-list">Add to list</button>

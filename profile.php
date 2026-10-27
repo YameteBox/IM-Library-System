@@ -5,8 +5,31 @@ require_once 'search_helpers.php'; // h(), formatPublishedDate()
 
 const OVERDUE_FEE_PER_DAY = 5; // pesos
 
-// Same fallback library.php uses until real login sessions are in place
-$userId = $_SESSION['student_id'] ?? '2023-00123';
+// Must be logged in (login.php sets these session values); users.id is an integer
+if (empty($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+$userId = (int) $_SESSION['user_id'];
+
+// This student's details for the header, avatar and forms
+$stmt = $pdo->prepare(
+    'SELECT u.student_number, d.username, d.email, p.bio
+       FROM users u
+       LEFT JOIN user_details  d ON d.id = u.id
+       LEFT JOIN user_profiles p ON p.id = u.id
+      WHERE u.id = :id'
+);
+$stmt->execute([':id' => $userId]);
+$me = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$me) {
+    header('Location: logout.php'); // session points at a user that no longer exists
+    exit;
+}
+$studentNumber = (string) $me['student_number'];
+$username      = (string) ($me['username'] ?? $studentNumber);
+$email         = (string) ($me['email'] ?? '');
+$bio           = (string) ($me['bio'] ?? '');
 
 /** Days past the due date x the daily fee (0 when not overdue). */
 function loanOverdueFee(string $dueDate): float
@@ -45,14 +68,20 @@ function loanDaysText(int $n): string
     return abs($n) . ' day' . (abs($n) === 1 ? '' : 's');
 }
 
-// Approved, not-yet-returned loans for this student
-// TODO (backend): approved, not-yet-returned loans for $userId, soonest due first.
-// Rows: title, authors, due_date, borrowed_at.
-$activeLoans = [];
+// Approved, not-yet-returned loans for this student, soonest due first
+$stmt = $pdo->prepare(
+    "SELECT bk.title, bk.authors, bb.due_date, bb.borrowed_at
+       FROM borrowed_books bb
+       JOIN books bk ON bk.id = bb.book_id
+      WHERE bb.user_id = :uid AND bb.status = 'approved' AND bb.returned_at IS NULL
+      ORDER BY bb.due_date, bb.id"
+);
+$stmt->execute([':uid' => $userId]);
+$activeLoans = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Placeholder books so the tabs have something to show while there are no real loans.
 // Set to false (or delete this block) once real data is in the database.
-const SHOW_PLACEHOLDER_LOANS = true;
+const SHOW_PLACEHOLDER_LOANS = false;
 if (SHOW_PLACEHOLDER_LOANS && empty($activeLoans)) {
     // [title, authors, days until due (negative = overdue)]
     $samples = [
@@ -97,8 +126,8 @@ $overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">My Profile — Student #2023-00123</h1>
-          <span class="brand__user">maria.santos</span><span class="role-badge">student</span>
+          <h1 class="brand__title">My Profile — Student #<?= h($studentNumber) ?></h1>
+          <span class="brand__user"><?= h($username) ?></span><span class="role-badge">student</span>
         </div>
       </div>
       <nav class="nav" aria-label="Main">
@@ -111,10 +140,10 @@ $overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
     <div class="toast-region" data-toast-region aria-live="polite"></div>
     <section class="panel">
       <div class="profile-head">
-        <div class="avatar " aria-hidden="true">MA</div>
+        <div class="avatar " aria-hidden="true"><?= h(userInitials($username)) ?></div>
         <div>
-          <h2 class="profile-name">maria.santos</h2>
-          <dl class="kv"><dt>Student No.</dt><dd>2023-00123</dd><dt>Email</dt><dd>maria@example.com</dd><dt>Bio</dt><dd>Grade 11. Loves astronomy.</dd></dl>
+          <h2 class="profile-name"><?= h($username) ?></h2>
+          <dl class="kv"><dt>Student No.</dt><dd><?= h($studentNumber) ?></dd><dt>Email</dt><dd><?= h($email) ?></dd><dt>Bio</dt><dd><?= h($bio) ?></dd></dl>
         </div>
       </div>
     </section>
@@ -122,7 +151,7 @@ $overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
     <section class="panel panel--lg form-stack" style="gap:14px" aria-labelledby="cp">
       <h2 class="panel-title" id="cp">Customize profile</h2>
       <div class="toggle-row"><button class="switch" id="dark-switch" type="button" role="switch" aria-checked="false" aria-label="Dark mode"></button><span>Dark mode</span></div>
-      <div class="field"><label for="bio">Bio</label><input class="input" id="bio" value="Grade 11. Loves astronomy."></div>
+      <div class="field"><label for="bio">Bio</label><input class="input" id="bio" value="<?= h($bio) ?>"></div>
         <div class="choice-row">
           <label class="choice"><input type="radio" name="color-mode" value="solid" checked> Solid color</label>
           <label class="choice"><input type="radio" name="color-mode" value="gradient"> Gradient</label>
@@ -142,7 +171,7 @@ $overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
       <h2 class="panel-title" id="as">Account settings</h2>
       <div class="field">
           <label for="f-username">Username</label>
-          <input class="input" id="f-username" name="username" type="text" placeholder="" >
+          <input class="input" id="f-username" name="username" type="text" value="<?= h($username) ?>" placeholder="" >
         </div>
       <div class="field">
           <label for="f-current">Current Password</label>
