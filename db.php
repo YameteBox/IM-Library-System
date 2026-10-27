@@ -4,7 +4,7 @@ $host = 'localhost';
 $port = '5432';        
 $dbname = 'Library_Database';
 $dbuser = 'postgres';  
-$dbpass = 'passplease';          
+$dbpass = 'makulit11';          
  
 try {
     $pdo = new PDO(

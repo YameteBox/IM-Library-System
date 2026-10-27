@@ -260,6 +260,7 @@ $watchedBookIds = $notifications['watched'];
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>
   <script src="js/server-search.js"></script>
+  <script src="js/borrow.js"></script>
   <script src="js/app.js?v=2"></script>
 </body>
 </html>

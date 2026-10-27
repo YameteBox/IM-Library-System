@@ -18,6 +18,8 @@ $username = (string) ($_SESSION['username'] ?? $_SESSION['student_number'] ?? ''
 // When it is true, the student sees the code form until $_SESSION['otp_verified']
 // is set, then the normal welcome card.
 // ---------------------------------------------------------------------------
+// OTP is only required right after registration (register.php sets $_SESSION['otp_pending']).
+// Normal log-ins skip it.
 const OTP_ENFORCED    = true;
 const OTP_LENGTH      = 6;
 const OTP_RESEND_WAIT = 30; // seconds the Resend button stays disabled (front end only)
@@ -30,7 +32,85 @@ const OTP_RESEND_WAIT = 30; // seconds the Resend button stays disabled (front e
  */
 function otpSend(PDO $pdo, int $userId): bool
 {
-    return false;
+    try {
+        otpEnsureTable($pdo);
+
+        // Server-side resend limit (slightly shorter than the 30s button cooldown)
+        $stmt = $pdo->prepare('SELECT last_sent_at FROM otp_codes WHERE user_id = :uid');
+        $stmt->execute([':uid' => $userId]);
+        $last = $stmt->fetchColumn();
+        if ($last && time() - strtotime((string) $last) < 25) {
+            return false;
+        }
+
+        $stmt = $pdo->prepare('SELECT email FROM user_details WHERE id = :uid');
+        $stmt->execute([':uid' => $userId]);
+        $email = (string) $stmt->fetchColumn();
+        if ($email === '') {
+            return false;
+        }
+
+        $code = str_pad((string) random_int(0, 999999), OTP_LENGTH, '0', STR_PAD_LEFT);
+
+        $pdo->prepare(
+            "INSERT INTO otp_codes (user_id, code_hash, expires_at, attempts, last_sent_at)
+             VALUES (:uid, :hash, NOW() + INTERVAL '10 minutes', 0, NOW())
+             ON CONFLICT (user_id) DO UPDATE
+               SET code_hash = EXCLUDED.code_hash, expires_at = EXCLUDED.expires_at,
+                   attempts = 0, last_sent_at = NOW()"
+        )->execute([':uid' => $userId, ':hash' => password_hash($code, PASSWORD_DEFAULT)]);
+
+        return otpMail($email, $code);
+    } catch (Throwable $e) {
+        error_log('otpSend: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function otpEnsureTable(PDO $pdo): void
+{
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS otp_codes (
+            user_id      INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            code_hash    TEXT NOT NULL,
+            expires_at   TIMESTAMP NOT NULL,
+            attempts     INTEGER NOT NULL DEFAULT 0,
+            last_sent_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )'
+    );
+}
+
+/** Sends the code by email with PHPMailer (composer require phpmailer/phpmailer). */
+function otpMail(string $to, string $code): bool
+{
+    $autoload = __DIR__ . '/vendor/autoload.php';
+    $cfgFile  = __DIR__ . '/mail_config.php';
+    if (!is_file($autoload) || !is_file($cfgFile)) {
+        error_log('otpMail: PHPMailer or mail_config.php is missing.');
+        return false;
+    }
+    require_once $autoload;
+    $cfg = require $cfgFile;
+
+    try {
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host       = $cfg['host'];
+        $mail->Port       = $cfg['port'];
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $cfg['username'];
+        $mail->Password   = $cfg['password'];
+        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->setFrom($cfg['from'], $cfg['from_name']);
+        $mail->addAddress($to);
+        $mail->Subject = 'Your library verification code';
+        $mail->Body    = "Your verification code is $code. It expires in 10 minutes.\n\nIf you did not register, ignore this email.";
+        $mail->send();
+        return true;
+    } catch (Throwable $e) {
+        error_log('otpMail: ' . $e->getMessage());
+        return false;
+    }
 }
 
 /**
@@ -41,8 +121,33 @@ function otpSend(PDO $pdo, int $userId): bool
  */
 function otpVerify(PDO $pdo, int $userId, string $code): array
 {
-    // Placeholder: accepts any well-formed code. Replace with the real check.
-    return [true, null];
+    try {
+        otpEnsureTable($pdo);
+        $stmt = $pdo->prepare('SELECT code_hash, attempts, expires_at < NOW() AS expired FROM otp_codes WHERE user_id = :uid');
+        $stmt->execute([':uid' => $userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            return [false, 'No active code. Please request a new one.'];
+        }
+        if ($row['expired']) {
+            return [false, 'That code has expired. Please request a new one.'];
+        }
+        if ((int) $row['attempts'] >= 5) {
+            return [false, 'Too many wrong attempts. Please request a new code.'];
+        }
+        if (!password_verify($code, $row['code_hash'])) {
+            $pdo->prepare('UPDATE otp_codes SET attempts = attempts + 1 WHERE user_id = :uid')
+                ->execute([':uid' => $userId]);
+            return [false, 'That code is not correct.'];
+        }
+
+        $pdo->prepare('DELETE FROM otp_codes WHERE user_id = :uid')->execute([':uid' => $userId]);
+        return [true, null];
+    } catch (Throwable $e) {
+        error_log('otpVerify: ' . $e->getMessage());
+        return [false, 'Server error. Please try again.'];
+    }
 }
 
 /**
@@ -51,7 +156,14 @@ function otpVerify(PDO $pdo, int $userId, string $code): array
  */
 function otpMaskedDestination(PDO $pdo, int $userId): string
 {
-    return '';
+    $stmt = $pdo->prepare('SELECT email FROM user_details WHERE id = :uid');
+    $stmt->execute([':uid' => $userId]);
+    $email = (string) $stmt->fetchColumn();
+    if (strpos($email, '@') === false) {
+        return '';
+    }
+    [$name, $domain] = explode('@', $email, 2);
+    return mb_substr($name, 0, 1) . '***@' . $domain;
 }
 
 // ---- Handle the OTP form ---------------------------------------------------
@@ -59,7 +171,7 @@ $flashMessage = '';
 $flashType    = 'error';
 $redirectTo   = 'welcome.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && OTP_ENFORCED && empty($_SESSION['otp_verified'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && OTP_ENFORCED && !empty($_SESSION['otp_pending'])) {
     $action = (string) ($_POST['action'] ?? '');
 
     if ($action === 'verify_otp') {
@@ -71,6 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && OTP_ENFORCED && empty($_SESSION['ot
             if ($ok) {
                 session_regenerate_id(true);
                 $_SESSION['otp_verified'] = true;
+                unset($_SESSION['otp_pending']);
                 $redirectTo = 'library.php'; // verified: go straight to the library
             } else {
                 $flashMessage = $err ?? 'That code is not valid.';
@@ -100,7 +213,13 @@ if (isset($_SESSION['flash_message'])) {
     unset($_SESSION['flash_message'], $_SESSION['flash_type']);
 }
 
-$needsOtp    = OTP_ENFORCED && empty($_SESSION['otp_verified']);
+$needsOtp    = OTP_ENFORCED && !empty($_SESSION['otp_pending']);
+
+// Send the first code once, when the student lands here after registering
+if ($needsOtp && empty($_SESSION['otp_sent'])) {
+    $_SESSION['otp_sent'] = true;
+    otpSend($pdo, $userId);
+}
 $destination = $needsOtp ? otpMaskedDestination($pdo, $userId) : '';
 ?>
 <!doctype html>

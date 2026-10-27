@@ -1,4 +1,5 @@
 <?php
+session_start();
 require 'db.php';   // provides $pdo
 
 $errors  = [];
@@ -66,7 +67,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([':id' => $userId]);
 
             $pdo->commit();
-            $success = true;
+
+            // Sign the new student in and send them to welcome.php to verify the OTP
+            session_regenerate_id(true);
+            $_SESSION['user_id']        = $userId;
+            $_SESSION['student_number'] = $student;
+            $_SESSION['username']       = $username;
+            $_SESSION['otp_pending']    = true;
+            unset($_SESSION['otp_verified'], $_SESSION['otp_sent']);
+            header('Location: welcome.php');
+            exit;
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
@@ -125,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
               <div class="field">
                 <label for="f-student">Student Number</label>
-                <input class="input" id="f-student" name="student" type="text" value="<?= htmlspecialchars($old['student']) ?>" placeholder="2023-00123">
+                <input class="input" id="f-student" name="student" type="text" value="<?= htmlspecialchars($old['student']) ?>" placeholder="136452120529">
               </div>
               <div class="field">
                 <label for="f-username">Username</label>
