@@ -294,5 +294,6 @@ $overdueLoans = array_values(array_filter($activeLoans, function ($loan) {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

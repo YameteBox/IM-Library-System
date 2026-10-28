@@ -17,7 +17,12 @@ $username      = $_SESSION['username'] ?? $studentNumber;
 $isBanned = userIsBanned($pdo, $userId); // banned students can browse but not request to borrow
 
 $search = catalogSearchParams($_GET);
-$books  = searchCatalog($pdo, $search);
+
+// Advanced search (the drop-down under the search bar) submits to this same page with adv=1
+$isAdvanced = isset($_GET['adv']);
+$adv        = advancedSearchParams($_GET);
+$advActive  = $isAdvanced && advancedFiltersActive($adv);
+$books      = $advActive ? searchCatalogAdvanced($pdo, $adv) : searchCatalog($pdo, $search);
 
 // Books this student already has a pending request for
 $stmt = $pdo->prepare(
@@ -60,6 +65,20 @@ $watchedBookIds = $notifications['watched'];
     .mini-card__link::after { content: ""; position: absolute; inset: 0; }
     .mini-card:hover .mini-card__link, .mini-card__link:focus-visible { text-decoration: underline; }
 <?= notificationStyles() ?>
+    /* Advanced search button: filled + animated */
+    #toggle-advanced { background: #1E5EBA; color: #fff; border: 1px solid #1E5EBA; border-radius: 999px; font-weight: 600;
+      transition: background-color .2s ease, transform .2s ease, box-shadow .2s ease; }
+    #toggle-advanced:hover { background: #17489a; border-color: #17489a; transform: translateY(-2px); box-shadow: 0 6px 14px rgba(30,94,186,.35); }
+    #toggle-advanced:active { transform: translateY(0) scale(.97); box-shadow: none; }
+    #toggle-advanced:focus-visible { outline: 3px solid rgba(30,94,186,.4); outline-offset: 2px; }
+    #toggle-advanced #advanced-caret { display: inline-block; transition: transform .25s ease; }
+    #toggle-advanced:hover #advanced-caret { transform: translateY(2px); }
+    #advanced-form:not([hidden]) { animation: advSlide .3s ease both; }
+    @keyframes advSlide { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) {
+      #toggle-advanced, #toggle-advanced #advanced-caret { transition: none; }
+      #advanced-form:not([hidden]) { animation: none; }
+    }
   </style>
 </head>
 <body data-page="library">
@@ -74,7 +93,6 @@ $watchedBookIds = $notifications['watched'];
       </div>
       <nav class="nav" aria-label="Main">
 <?= notificationBellHtml($notifications['items']) ?>
-        <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
         <a class="nav__link" href="dashboard.php">Dashboard</a>
@@ -93,8 +111,69 @@ $watchedBookIds = $notifications['watched'];
           <select class="select" name="field" aria-label="Search field"><?= searchFieldOptions($search['field']) ?></select>
           <button class="btn" type="submit">Search</button>
         </form>
-        <p class="hero__links"><a href="advanced-search.php">Advanced search</a></p>
+        <p class="hero__links"><button class="btn btn--outline btn--sm" type="button" id="toggle-advanced" aria-expanded="<?= $isAdvanced ? 'true' : 'false' ?>" aria-controls="advanced-form">Advanced search <span aria-hidden="true" id="advanced-caret"><?= $isAdvanced ? '▴' : '▾' ?></span></button></p>
       </section>
+
+      <form class="panel panel--lg form-stack" id="advanced-form" method="get" action="library.php"<?= $isAdvanced ? '' : ' hidden' ?>>
+        <input type="hidden" name="adv" value="1">
+        <div class="form-grid form-grid--3">
+          <div class="field">
+            <label for="f-tags">Tags</label>
+            <input class="input" id="f-tags" name="tags" type="text" value="<?= h($adv['tags']) ?>" placeholder="Input tags or keywords, separated by commas" maxlength="200">
+          </div>
+          <div class="field">
+            <label for="f-title">Title</label>
+            <input class="input" id="f-title" name="title" type="text" value="<?= h($adv['title']) ?>" placeholder="e.g. Cosmos" maxlength="255">
+          </div>
+          <div class="field">
+            <label for="f-author">Author</label>
+            <input class="input" id="f-author" name="author" type="text" value="<?= h($adv['author']) ?>" placeholder="e.g. Carl Sagan" maxlength="255">
+          </div>
+          <div class="field">
+            <label for="f-isbn">ISBN</label>
+            <input class="input" id="f-isbn" name="isbn" type="text" value="<?= h($adv['isbn']) ?>" placeholder="e.g. 978-0-345-53943-4" maxlength="20">
+          </div>
+          <div class="field">
+            <label for="f-adv-type">Media type</label>
+            <select class="select" id="f-adv-type" name="type"><?= mediaTypeFilterOptions($adv['type']) ?></select>
+          </div>
+          <div class="field">
+            <label for="f-classification">Classification</label>
+            <select class="select" id="f-classification" name="classification">
+              <option value="">All Classifications</option>
+              <?php foreach (CATALOG_CLASSIFICATIONS as $category): ?>
+                <option value="<?= h($category) ?>"<?= $adv['classification'] === $category ? ' selected' : '' ?>><?= h($category) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-from">Published from</label>
+            <input class="input" id="f-from" name="from" type="number" value="<?= h($adv['from']) ?>" placeholder="Year, e.g. 1980" min="1" max="9999" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="f-to">Published to</label>
+            <input class="input" id="f-to" name="to" type="number" value="<?= h($adv['to']) ?>" placeholder="Year, e.g. 2020" min="1" max="9999" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="f-availability">Availability</label>
+            <select class="select" id="f-availability" name="availability"><?= simpleOptions(ADVANCED_AVAILABILITY, $adv['availability']) ?></select>
+          </div>
+        </div>
+        <div class="form-grid form-grid--2">
+          <div class="field">
+            <label for="f-shelf">Shelf location</label>
+            <input class="input" id="f-shelf" name="shelf" type="text" value="<?= h($adv['shelf']) ?>" placeholder="e.g. C-04" maxlength="20">
+          </div>
+          <div class="field">
+            <label for="f-sort">Sort by</label>
+            <select class="select" id="f-sort" name="sort"><?= simpleOptions(ADVANCED_SORTS, $adv['sort']) ?></select>
+          </div>
+        </div>
+        <div class="actions actions--end">
+          <button class="btn btn--round" type="submit">Search</button>
+          <a class="btn btn--round btn--outline" href="library.php">Reset</a>
+        </div>
+      </form>
 
       <section aria-labelledby="new-h" style="display:flex;flex-direction:column;gap:12px">
         <div class="carousel-head">
@@ -116,7 +195,7 @@ $watchedBookIds = $notifications['watched'];
         <h2 class="section-title" id="cat-h">Browse the catalog</h2>
         <div class="book-grid">
         <?php if (empty($books)): ?>
-          <p class="sub"><?= catalogFiltersActive($search) ? 'No books match your search.' : 'No books in the catalog yet.' ?></p>
+          <p class="sub"><?= ($advActive || catalogFiltersActive($search)) ? 'No books match your search.' : 'No books in the catalog yet.' ?></p>
         <?php endif; ?>
         <?php foreach ($books as $book): ?>
           <?php
@@ -236,6 +315,34 @@ $watchedBookIds = $notifications['watched'];
     })();
   </script>
   <script>
+    // Advanced search drop-down. The form must really submit to PHP, so keep app.js
+    // (prototype) from intercepting its submit/click.
+    (function () {
+      var btn   = document.getElementById('toggle-advanced');
+      var form  = document.getElementById('advanced-form');
+      var caret = document.getElementById('advanced-caret');
+      if (!btn || !form) return;
+
+      document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        if (t.closest('#toggle-advanced')) {
+          e.stopImmediatePropagation();
+          var open = form.hidden;
+          form.hidden = !open;
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          caret.textContent = open ? '▴' : '▾';
+          if (open) { var first = form.querySelector('input'); if (first) first.focus(); }
+        } else if (t.closest('#advanced-form button[type="submit"]')) {
+          e.stopImmediatePropagation();
+        }
+      }, true);
+      document.addEventListener('submit', function (e) {
+        if (e.target && e.target.closest && e.target.closest('#advanced-form')) e.stopImmediatePropagation();
+      }, true);
+    })();
+  </script>
+  <script>
     // Chatbot window: open/close only
     (function () {
       var fab = document.getElementById('chatbot-toggle');
@@ -263,5 +370,6 @@ $watchedBookIds = $notifications['watched'];
   <script src="js/borrow.js"></script>
   <script src="js/add-to-list.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

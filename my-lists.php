@@ -118,5 +118,6 @@ $lists = userListsWithCounts($pdo, $userId);
   <script src="js/alerts.js"></script>
   <script src="js/server-search.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

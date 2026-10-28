@@ -3,16 +3,13 @@ session_start();
 require 'db.php';
 require_once 'search_helpers.php'; // h(), formatPublishedDate()
 require_once 'events_helpers.php';
-require_once 'loans_helpers.php'; // loan queries; also defines OVERDUE_FEE_PER_DAY
 
-// Must be logged in (login.php sets these session values), same as library.php
-if (empty($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
+if (!defined('OVERDUE_FEE_PER_DAY')) {
+    define('OVERDUE_FEE_PER_DAY', 5); // pesos, same rate as profile.php
 }
-$userId    = (int) $_SESSION['user_id'];
-$studentId = (string) ($_SESSION['student_number'] ?? '');
-$username  = (string) ($_SESSION['username'] ?? $studentId);
+
+// Same fallback library.php uses until real login sessions are in place
+$studentId = (string) ($_SESSION['student_id'] ?? '2023-00123');
 
 ensureEventsTable($pdo);
 $month     = calendarMonth($_GET['month'] ?? null);
@@ -32,26 +29,34 @@ function dashDaysText(int $n): string
 }
 
 // Approved, not-yet-returned loans (includes the overdue ones)
-$borrowed = studentActiveLoans($pdo, $userId);
+// TODO (backend): approved, not-yet-returned loans for $studentId, soonest due first.
+// Rows: title, authors, due_date.
+$borrowed = [];
 
 $overdue = array_values(array_filter($borrowed, function ($loan) {
     return dashDaysOverdue((string) $loan['due_date']) > 0;
 }));
 
 // Requests still waiting for the librarian
-$pending = studentPendingRequests($pdo, $userId);
+// TODO (backend): pending loan requests for $studentId, newest first. Rows: title, authors, borrowed_at.
+$pending = [];
 
 // ---- Popular & recommended books ------------------------------------------
 require_once 'media_types.php';
 
 // Popular: most-borrowed items overall
-$popular = popularBooks($pdo, 5);
+// TODO (backend): the 5 most-borrowed books (approved loans).
+// Rows: id, title, authors, media_type, classification, copies_available, times_borrowed.
+$popular = [];
 
 // Recommended: unborrowed items in the classifications this student borrows most,
 // most popular first. Falls back to popular items they haven't borrowed yet.
-$favClasses = studentFavouriteClassifications($pdo, $userId);
+// TODO (backend): the classifications this student borrows most, most-borrowed first (list of strings).
+$favClasses = [];
 
-$candidates = recommendationCandidates($pdo, $userId);
+// TODO (backend): up to 100 books with copies available that this student has never borrowed,
+// most popular first. Same row shape as $popular.
+$candidates = [];
 
 $recommended = [];
 foreach ($favClasses as $class) {
@@ -110,12 +115,11 @@ function dashBookItem(array $b, string $extra): string
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
           <h1 class="brand__title">Dashboard — Student #<?= h($studentId) ?></h1>
-          <span class="brand__user"><?= h($username) ?></span><span class="role-badge">student</span>
+          <span class="brand__user">maria.santos</span><span class="role-badge">student</span>
         </div>
       </div>
       <nav class="nav" aria-label="Main">
         <a class="nav__link" href="library.php">← Back to library</a>
-        <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
         <a class="nav__link" href="logout.php">Log out</a>
@@ -242,5 +246,6 @@ function dashBookItem(array $b, string $extra): string
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

@@ -243,6 +243,10 @@ $loanHistoryByBook = loanHistoryByBook($pdo, array_column($books, 'id'));
 $pendingRequests = pendingLoanRequests($pdo);
 $activeLoans     = activeLoansForAdmin($pdo);
 
+// Highest loan id in each tab: a bigger id than the one last seen means something new was added
+$latestRequestId = $pendingRequests ? max(array_map('intval', array_column($pendingRequests, 'loan_id'))) : 0;
+$latestLoanId    = $activeLoans ? max(array_map('intval', array_column($activeLoans, 'loan_id'))) : 0;
+
 $maxPublished = date('Y-m-d', strtotime('-1 day'));
 ?>
 <!doctype html>
@@ -267,6 +271,9 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
     .history-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
     .history-table th, .history-table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(128,128,128,.25); vertical-align: top; }
     .history-table small { opacity: .7; }
+    /* Red dot on a tab when something new was added since the admin last opened it */
+    .tab-dot { display: inline-block; width: 9px; height: 9px; margin-left: 6px; border-radius: 50%; background: #b42318; vertical-align: middle; }
+    .tab-dot[hidden] { display: none; }
     /* Receipt: 3.5 x 5 in, same size on screen and on paper */
     #receipt-dialog { border: 0; border-radius: 12px; padding: 16px; width: auto; max-width: calc(100% - 32px); }
     #receipt-dialog::backdrop { background: rgba(0,0,0,.5); }
@@ -307,7 +314,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         <a class="nav__link" href="admin-logout.php">Log out</a>
       </nav>
     </header>
-    <nav class="tabs" role="tablist" aria-label="Admin sections"><a class="tab is-active" href="#catalog" role="tab" data-tab="catalog" aria-selected="true" aria-current="page">Catalog</a><a class="tab" href="#requests" role="tab" data-tab="requests" aria-selected="false">Pending requests<span class="tab-count"><?= count($pendingRequests) ?></span></a><a class="tab" href="#loan" role="tab" data-tab="loan" aria-selected="false">On loan<span class="tab-count"><?= count($activeLoans) ?></span></a></nav>
+    <nav class="tabs" role="tablist" aria-label="Admin sections"><a class="tab is-active" href="#catalog" role="tab" data-tab="catalog" aria-selected="true" aria-current="page">Catalog</a><a class="tab" href="#requests" role="tab" data-tab="requests" aria-selected="false" data-latest="<?= $latestRequestId ?>">Pending requests<span class="tab-dot" data-tab-dot role="img" aria-label="New items" hidden></span></a><a class="tab" href="#loan" role="tab" data-tab="loan" aria-selected="false" data-latest="<?= $latestLoanId ?>">On loan<span class="tab-dot" data-tab-dot role="img" aria-label="New items" hidden></span></a></nav>
     <div class="toast-region" data-toast-region aria-live="polite">
       <?php if ($flashMessage !== ''): ?>
         <div class="alert alert-<?= $flashType === 'success' ? 'success' : 'danger' ?> alert-dismissible fade show" role="alert">
@@ -698,8 +705,35 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
       var tabs = Array.prototype.slice.call(document.querySelectorAll('.tabs [data-tab]'));
       var panels = Array.prototype.slice.call(document.querySelectorAll('[data-tab-panel]'));
 
+      // Red dots: remember the newest loan id the admin has seen in each tab (per browser)
+      function seenKey(name) { return 'adminSeen:' + name; }
+      function getSeen(name) {
+        try { return parseInt(localStorage.getItem(seenKey(name)), 10) || 0; } catch (e) { return 0; }
+      }
+      function setSeen(name, id) {
+        try { if (id > getSeen(name)) localStorage.setItem(seenKey(name), String(id)); } catch (e) {}
+      }
+      function refreshDots() {
+        tabs.forEach(function (t) {
+          var dot = t.querySelector('[data-tab-dot]');
+          if (!dot) return;
+          dot.hidden = !((parseInt(t.dataset.latest, 10) || 0) > getSeen(t.dataset.tab));
+        });
+      }
+      // Approving a request turns it into a loan the admin already knows about: no dot for that
+      document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || !form.matches || !form.matches('[data-loan-form]')) return;
+        if (e.submitter && e.submitter.value === 'approve_request') {
+          var idField = form.querySelector('[name="loan_id"]');
+          if (idField) setSeen('loan', parseInt(idField.value, 10) || 0);
+        }
+      }, true);
+
       function show(name) {
         if (!document.getElementById('tab-' + name)) name = 'catalog';
+        var open = tabs.filter(function (t) { return t.dataset.tab === name; })[0];
+        if (open && open.dataset.latest) setSeen(name, parseInt(open.dataset.latest, 10) || 0);
         tabs.forEach(function (t) {
           var on = t.dataset.tab === name;
           t.classList.toggle('is-active', on);
@@ -707,6 +741,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
         });
         panels.forEach(function (p) { p.hidden = p.id !== 'tab-' + name; });
+        refreshDots();
       }
 
       tabs.forEach(function (t) {
@@ -745,5 +780,6 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
       document.getElementById('close-receipt').addEventListener('click', function () { dialog.close(); });
     })();
   </script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

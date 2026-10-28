@@ -96,5 +96,6 @@ $borrowed = currentlyBorrowedByUsers($pdo, array_column($users, 'student_id'));
   <script src="js/alerts.js"></script>
   <script src="js/server-search.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

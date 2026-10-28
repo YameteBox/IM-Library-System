@@ -215,5 +215,6 @@ $formTime = $editing && $editing['event_time'] ? substr((string) $editing['event
     document.addEventListener('submit', function (e) { e.stopImmediatePropagation(); }, true);
   </script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

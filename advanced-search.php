@@ -57,7 +57,6 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
       </div>
       <nav class="nav" aria-label="Main">
-        <a class="nav__link" href="search-profiles.php">Search Profiles</a>
         <a class="nav__link" href="my-lists.php">My Lists</a>
         <a class="nav__link" href="profile.php">Profile</a>
         <a class="nav__link" href="dashboard.php">Dashboard</a>
@@ -204,5 +203,6 @@ $userLists = $stmt->fetchAll(PDO::FETCH_ASSOC);
     })();
   </script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

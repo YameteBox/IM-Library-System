@@ -163,5 +163,6 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
   <script src="js/server-search.js"></script>
   <script src="js/borrow.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

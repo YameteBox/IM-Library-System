@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 require 'db.php';
@@ -556,5 +555,6 @@ $avatarBackground = $useGradient
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/alerts.js"></script>
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>

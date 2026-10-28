@@ -49,5 +49,6 @@ $adminNumber = (string) ($_SESSION['admin_number'] ?? '');
   </div>
 
   <script src="js/app.js?v=2"></script>
+  <script src="js/logout-modal.js"></script>
 </body>
 </html>
