@@ -10,6 +10,7 @@ if (empty($_SESSION['admin_id'])) {
 require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
+require_once 'loans_helpers.php'; // approve / reject / return + loan queries
 ensureCoverColumn($pdo);
 ensureAccessionColumn($pdo); // every new item gets its accession number from the database
 
@@ -47,9 +48,41 @@ $formAction  = 'admin-library.php' . ($queryString !== '' ? '?' . $queryString :
 
 $flashMessage = '';
 $flashType    = '';
+$redirectHash = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+
+    if ($action === 'delete_book') {
+        $result       = deleteCatalogItem($pdo, (int) ($_POST['book_id'] ?? 0));
+        $flashMessage = $result['message'];
+        $flashType    = $result['ok'] ? 'success' : 'error';
+        if ($result['ok']) {
+            deleteLocalCover($result['cover']);
+        }
+    }
+
+    // Borrowing: approve / reject a pending request, confirm a return
+    if (in_array($action, ['approve_request', 'reject_request', 'confirm_return'], true)) {
+        $loanId = (int) ($_POST['loan_id'] ?? 0);
+
+        if ($action === 'approve_request') {
+            $result       = approveLoanRequest($pdo, $loanId);
+            $redirectHash = '#requests';
+            if ($result['ok'] && $result['receipt'] !== null) {
+                $_SESSION['loan_receipt'] = $result['receipt']; // shown once after the redirect
+            }
+        } elseif ($action === 'reject_request') {
+            $result       = rejectLoanRequest($pdo, $loanId);
+            $redirectHash = '#requests';
+        } else {
+            $result       = returnLoan($pdo, $loanId);
+            $redirectHash = '#loan';
+        }
+
+        $flashMessage = $result['message'];
+        $flashType    = $result['ok'] ? 'success' : 'error';
+    }
 
     if ($action === 'update_stock') {
 
@@ -185,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash_type']    = $flashType;
     }
 
-    header('Location: ' . $formAction);
+    header('Location: ' . $formAction . $redirectHash);
     exit;
 }
 
@@ -199,10 +232,16 @@ if (isset($_SESSION['flash_message'])) {
 $search = catalogSearchParams($_GET);
 $books  = searchCatalog($pdo, $search);
 
-// Full loan history (every status, including returned), grouped by book
-// TODO (backend): every loan (any status, including returned), newest first, grouped by book id.
-// Row keys: loan_id, book_id, status, borrowed_at, due_date, returned_at, borrower_username, borrower_student_id.
-$loanHistoryByBook = [];
+// Receipt for the request that was just approved (one-time)
+$receipt = $_SESSION['loan_receipt'] ?? null;
+unset($_SESSION['loan_receipt']);
+
+// Full loan history (every status, including returned) for the books on this page, grouped by book id
+$loanHistoryByBook = loanHistoryByBook($pdo, array_column($books, 'id'));
+
+// Borrowing tabs
+$pendingRequests = pendingLoanRequests($pdo);
+$activeLoans     = activeLoansForAdmin($pdo);
 
 $maxPublished = date('Y-m-d', strtotime('-1 day'));
 ?>
@@ -268,7 +307,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         <a class="nav__link" href="admin-logout.php">Log out</a>
       </nav>
     </header>
-    <nav class="tabs" role="tablist" aria-label="Admin sections"><a class="tab is-active" href="#catalog" role="tab" data-tab="catalog" aria-selected="true" aria-current="page">Catalog</a><a class="tab" href="#requests" role="tab" data-tab="requests" aria-selected="false">Pending requests</a><a class="tab" href="#loan" role="tab" data-tab="loan" aria-selected="false">On loan</a></nav>
+    <nav class="tabs" role="tablist" aria-label="Admin sections"><a class="tab is-active" href="#catalog" role="tab" data-tab="catalog" aria-selected="true" aria-current="page">Catalog</a><a class="tab" href="#requests" role="tab" data-tab="requests" aria-selected="false">Pending requests<span class="tab-count"><?= count($pendingRequests) ?></span></a><a class="tab" href="#loan" role="tab" data-tab="loan" aria-selected="false">On loan<span class="tab-count"><?= count($activeLoans) ?></span></a></nav>
     <div class="toast-region" data-toast-region aria-live="polite">
       <?php if ($flashMessage !== ''): ?>
         <div class="alert alert-<?= $flashType === 'success' ? 'success' : 'danger' ?> alert-dismissible fade show" role="alert">
@@ -482,9 +521,9 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
                         <tr>
                           <td><?= h($historyLoan['borrower_username']) ?><br><small>#<?= h($historyLoan['borrower_student_id']) ?></small></td>
                           <td><?= h(ucfirst($displayStatus)) ?></td>
-                          <td><?= h(formatShortDate($historyLoan['borrowed_at'])) ?></td>
-                          <td><?= h(formatShortDate($historyLoan['due_date'])) ?></td>
-                          <td><?= $historyLoan['returned_at'] ? h(formatShortDate($historyLoan['returned_at'])) : '—' ?></td>
+                          <td><?= h(formatShortDate((string) $historyLoan['borrowed_at'])) ?></td>
+                          <td><?= !empty($historyLoan['due_date']) ? h(formatShortDate((string) $historyLoan['due_date'])) : '—' ?></td>
+                          <td><?= $historyLoan['returned_at'] ? h(formatShortDate((string) $historyLoan['returned_at'])) : '—' ?></td>
                         </tr>
                       <?php endforeach; ?>
                     </tbody>
@@ -493,7 +532,11 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
               <?php endif; ?>
             </div>
 
-            <button class="btn btn--block btn--danger btn--sm" type="button" data-action="delete-item">Delete Item</button>
+            <form method="POST" action="<?= h($formAction) ?>" data-native-submit>
+              <input type="hidden" name="action" value="delete_book">
+              <input type="hidden" name="book_id" value="<?= $bookId ?>">
+              <button class="btn btn--block btn--danger btn--sm" type="submit" onclick="return confirm('Delete this item from the catalog permanently?');">Delete Item</button>
+            </form>
           </div>
         </article>
       <?php endforeach; ?>
@@ -501,24 +544,48 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
     </section>
 
     <section id="tab-requests" role="tabpanel" data-tab-panel hidden>
+      <?php if (empty($pendingRequests)): ?>
+        <p class="sub">No pending requests.</p>
+      <?php endif; ?>
       <div class="request-grid" id="request-grid">
-        <article class="request-card" data-title="Cosmos">
-          <h3 class="request-card__title">Cosmos</h3>
-          <p class="request-card__line">Borrower: juan.delacruz (#2023-00456)</p>
-          <p class="request-card__date">Requested October 15, 2026</p>
-          <div class="btn-row"><button class="btn" type="button" data-action="approve">Approve</button><button class="btn btn--danger" type="button" data-action="reject">Reject</button></div>
+      <?php foreach ($pendingRequests as $req): $left = (int) $req['copies_available']; ?>
+        <article class="request-card" data-title="<?= h($req['title']) ?>">
+          <h3 class="request-card__title"><?= h($req['title']) ?></h3>
+          <p class="request-card__line">Borrower: <?= h($req['borrower_username']) ?> (#<?= h($req['borrower_student_id']) ?>)</p>
+          <p class="request-card__date">Requested <?= h(formatPublishedDate(substr((string) $req['borrowed_at'], 0, 10))) ?></p>
+          <p class="request-card__line"><?= $left > 0 ? $left . ' cop' . ($left === 1 ? 'y' : 'ies') . ' available' : 'No copies available right now' ?></p>
+          <form method="post" action="<?= h($formAction) ?>" data-native-submit data-loan-form>
+            <input type="hidden" name="loan_id" value="<?= (int) $req['loan_id'] ?>">
+            <div class="btn-row">
+              <button class="btn" type="submit" name="action" value="approve_request"<?= $left > 0 ? '' : ' disabled' ?>>Approve</button>
+              <button class="btn btn--danger" type="submit" name="action" value="reject_request" onclick="return confirm('Reject this request?');">Reject</button>
+            </div>
+          </form>
         </article>
+      <?php endforeach; ?>
       </div>
     </section>
 
     <section id="tab-loan" role="tabpanel" data-tab-panel hidden>
+      <?php if (empty($activeLoans)): ?>
+        <p class="sub">Nothing is on loan right now.</p>
+      <?php endif; ?>
       <div class="request-grid" id="loan-grid">
-        <article class="request-card" data-title="Cosmos">
-          <h3 class="request-card__title">Cosmos</h3>
-          <p class="request-card__line">Borrower: juan.delacruz (#2023-00456)</p>
-          <p class="request-card__date">Due October 22, 2026</p>
-          <button class="btn btn--block" type="button" data-action="return">Confirm Returned</button>
+      <?php foreach ($activeLoans as $loan): $late = loanDaysLate((string) $loan['due_date']); ?>
+        <article class="request-card" data-title="<?= h($loan['title']) ?>">
+          <h3 class="request-card__title"><?= h($loan['title']) ?></h3>
+          <p class="request-card__line">Borrower: <?= h($loan['borrower_username']) ?> (#<?= h($loan['borrower_student_id']) ?>)</p>
+          <p class="request-card__date">Due <?= h(formatPublishedDate((string) $loan['due_date'])) ?></p>
+          <?php if ($late > 0): ?>
+            <p class="request-card__line" style="color:#b42318;font-weight:600"><?= $late ?> day<?= $late === 1 ? '' : 's' ?> overdue — ₱<?= number_format($late * OVERDUE_FEE_PER_DAY, 2) ?></p>
+          <?php endif; ?>
+          <form method="post" action="<?= h($formAction) ?>" data-native-submit data-loan-form>
+            <input type="hidden" name="action" value="confirm_return">
+            <input type="hidden" name="loan_id" value="<?= (int) $loan['loan_id'] ?>">
+            <button class="btn btn--block" type="submit" onclick="return confirm('Confirm this item was returned?');">Confirm Returned</button>
+          </form>
         </article>
+      <?php endforeach; ?>
       </div>
     </section>
   </div>
@@ -654,41 +721,25 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
     })();
   </script>
   <script>
-    // Print receipt: after Approve, show a receipt the admin can print.
-    // Capture phase, so the card's data is read before app.js updates/removes it.
+    // Loan receipt: after a request is approved the page reloads with the receipt data
+    window.LOAN_RECEIPT = <?= json_encode($receipt, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+  </script>
+  <script>
     (function () {
-      var LOAN_DAYS = 7; // loan period used for the due date on the receipt
       var dialog = document.getElementById('receipt-dialog');
+      var r = window.LOAN_RECEIPT;
+      function set(id, text) { document.getElementById(id).textContent = text || ''; }
 
-      function fmt(d) {
-        return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-      }
-      function set(id, text) { document.getElementById(id).textContent = text; }
-      var pad = function (n) { return String(n).padStart(2, '0'); };
-
-      document.addEventListener('click', function (e) {
-        var btn = e.target.closest && e.target.closest('#tab-requests [data-action="approve"]');
-        if (!btn) return;
-        var card = btn.closest('.request-card');
-        if (!card) return;
-
-        var line = (card.querySelector('.request-card__line') || {}).textContent || '';
-        var m = line.match(/Borrower:\s*(.+?)\s*\(#?([^)]+)\)/);
-        var requested = ((card.querySelector('.request-card__date') || {}).textContent || '')
-          .replace(/^\s*Requested\s*/i, '').trim();
-        var now = new Date();
-        var due = new Date(now.getTime() + LOAN_DAYS * 86400000);
-
-        set('rc-no', 'R-' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) +
-          '-' + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()));
-        set('rc-title', card.dataset.title || '');
-        set('rc-borrower', m ? m[1] : line);
-        set('rc-sid', m ? '#' + m[2] : '');
-        set('rc-requested', requested);
-        set('rc-approved', fmt(now));
-        set('rc-due', fmt(due));
+      if (r) {
+        set('rc-no', r.no);
+        set('rc-title', r.title);
+        set('rc-borrower', r.borrower);
+        set('rc-sid', r.student_id ? '#' + r.student_id : '');
+        set('rc-requested', r.requested);
+        set('rc-approved', r.approved);
+        set('rc-due', r.due);
         dialog.showModal();
-      }, true);
+      }
 
       document.getElementById('print-receipt').addEventListener('click', function () { window.print(); });
       document.getElementById('close-receipt').addEventListener('click', function () { dialog.close(); });

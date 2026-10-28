@@ -261,6 +261,7 @@ $watchedBookIds = $notifications['watched'];
   <script src="js/alerts.js"></script>
   <script src="js/server-search.js"></script>
   <script src="js/borrow.js"></script>
+  <script src="js/add-to-list.js"></script>
   <script src="js/app.js?v=2"></script>
 </body>
 </html>

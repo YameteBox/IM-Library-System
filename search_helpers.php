@@ -389,10 +389,32 @@ function searchUsers(PDO $pdo, string $q, int $limit = 50): array
 /** Approved, not-yet-returned loans for the given student numbers, keyed by student number. */
 function currentlyBorrowedByUsers(PDO $pdo, array $studentIds): array
 {
-    // TODO (backend): fetch approved, not-yet-returned loans (with book title and authors) for
-    // these student numbers. Return them grouped by student number:
-    // [ '2023-00123' => [ ['title' => ..., 'authors' => ..., 'due_date' => ...], ... ], ... ]
-    return [];
+    $studentIds = array_values(array_unique(array_map('strval', $studentIds)));
+    if (empty($studentIds)) {
+        return [];
+    }
+
+    $in   = implode(',', array_fill(0, count($studentIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT CAST(u.student_number AS text) AS student_number, bk.title, bk.authors, bb.due_date
+           FROM borrowed_books bb
+           JOIN users u  ON u.id = bb.user_id
+           JOIN books bk ON bk.id = bb.book_id
+          WHERE bb.status = 'approved' AND bb.returned_at IS NULL
+            AND CAST(u.student_number AS text) IN ($in)
+          ORDER BY bb.due_date, bb.id"
+    );
+    $stmt->execute($studentIds);
+
+    $byStudent = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $byStudent[$row['student_number']][] = [
+            'title'    => $row['title'],
+            'authors'  => $row['authors'],
+            'due_date' => $row['due_date'],
+        ];
+    }
+    return $byStudent;
 }
 
 /**
