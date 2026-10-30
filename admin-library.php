@@ -11,6 +11,12 @@ require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
 require_once 'loans_helpers.php'; // approve / reject / return + loan queries
+require_once 'account_helpers.php';
+$adminAcct = adminAccount($pdo, (int) $_SESSION['admin_id']); // latest username from the database
+if (!$adminAcct) {
+    header('Location: admin-logout.php'); // session points at an admin that no longer exists
+    exit;
+}
 ensureCoverColumn($pdo);
 ensureAccessionColumn($pdo); // every new item gets its accession number from the database
 
@@ -80,6 +86,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $redirectHash = '#loan';
         }
 
+        $flashMessage = $result['message'];
+        $flashType    = $result['ok'] ? 'success' : 'error';
+    }
+
+    // Library closure / typhoon: push every active due date back
+    if ($action === 'extend_all_loans') {
+        $result       = extendAllLoans($pdo, (int) ($_POST['days'] ?? 0));
+        $redirectHash = '#loan';
+        $flashMessage = $result['message'];
+        $flashType    = $result['ok'] ? 'success' : 'error';
+    }
+
+    // Extend just one loan, one borrower's loans, or one item's loans
+    if ($action === 'extend_loans') {
+        $scope = (string) ($_POST['scope'] ?? '');
+        $result       = extendActiveLoans($pdo, $scope, (int) ($_POST['target_id'] ?? 0), (int) ($_POST['days'] ?? 0));
+        $redirectHash = '#loan';
         $flashMessage = $result['message'];
         $flashType    = $result['ok'] ? 'success' : 'error';
     }
@@ -230,7 +253,12 @@ if (isset($_SESSION['flash_message'])) {
 
 // Catalog
 $search = catalogSearchParams($_GET);
-$books  = searchCatalog($pdo, $search);
+
+// Advanced search: the form sends adv=1. With no criteria filled in it just shows the whole catalog.
+$advancedMode = ($_GET['adv'] ?? '') === '1';
+$advSearch    = advancedSearchParams($_GET);
+$advActive    = $advancedMode && advancedFiltersActive($advSearch);
+$books        = $advActive ? searchCatalogAdvanced($pdo, $advSearch) : searchCatalog($pdo, $search);
 
 // Receipt for the request that was just approved (one-time)
 $receipt = $_SESSION['loan_receipt'] ?? null;
@@ -242,6 +270,7 @@ $loanHistoryByBook = loanHistoryByBook($pdo, array_column($books, 'id'));
 // Borrowing tabs
 $pendingRequests = pendingLoanRequests($pdo);
 $activeLoans     = activeLoansForAdmin($pdo);
+$extendTargets  = $activeLoans ? extendTargetOptions($pdo) : ['users' => [], 'books' => []];
 
 // Highest loan id in each tab: a bigger id than the one last seen means something new was added
 $latestRequestId = $pendingRequests ? max(array_map('intval', array_column($pendingRequests, 'loan_id'))) : 0;
@@ -302,7 +331,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">Library Management — Admin #A-001</h1>
+          <h1 class="brand__title">Library Management — Admin <?= htmlspecialchars($adminAcct['username'], ENT_QUOTES, 'UTF-8') ?></h1>
           <span class="role-badge">admin</span>
         </div>
       </div>
@@ -331,6 +360,70 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
       <button class="btn btn--round" type="submit">Search</button>
       <button class="btn btn--round btn--outline" type="button" id="toggle-add" aria-expanded="false" aria-controls="add-item-form">Add new item</button>
     </form>
+
+    <details class="panel panel--lg" id="advanced-search"<?= $advancedMode ? ' open' : '' ?>>
+      <summary style="cursor:pointer;font-weight:600">Advanced search<?= $advActive ? ' (' . count($books) . ' result' . (count($books) === 1 ? '' : 's') . ')' : '' ?></summary>
+      <form class="form-stack" id="advanced-search-form" method="get" action="admin-library.php#catalog" style="margin-top:12px">
+        <input type="hidden" name="adv" value="1">
+        <div class="form-grid form-grid--3">
+          <div class="field">
+            <label for="adv-tags">Tags</label>
+            <input class="input" id="adv-tags" name="tags" type="text" value="<?= h($advSearch['tags']) ?>" placeholder="Input tags or keywords, separated by commas" maxlength="200">
+          </div>
+          <div class="field">
+            <label for="adv-title">Title</label>
+            <input class="input" id="adv-title" name="title" type="text" value="<?= h($advSearch['title']) ?>" placeholder="e.g. Cosmos" maxlength="255">
+          </div>
+          <div class="field">
+            <label for="adv-author">Author</label>
+            <input class="input" id="adv-author" name="author" type="text" value="<?= h($advSearch['author']) ?>" placeholder="e.g. Carl Sagan" maxlength="255">
+          </div>
+          <div class="field">
+            <label for="adv-isbn">ISBN</label>
+            <input class="input" id="adv-isbn" name="isbn" type="text" value="<?= h($advSearch['isbn']) ?>" placeholder="e.g. 978-0-345-53943-4" maxlength="20">
+          </div>
+          <div class="field">
+            <label for="adv-type">Media type</label>
+            <select class="select" id="adv-type" name="type"><?= mediaTypeFilterOptions($advSearch['type']) ?></select>
+          </div>
+          <div class="field">
+            <label for="adv-classification">Classification</label>
+            <select class="select" id="adv-classification" name="classification">
+              <option value="">All Classifications</option>
+              <?php foreach (CATALOG_CLASSIFICATIONS as $category): ?>
+                <option value="<?= h($category) ?>"<?= $advSearch['classification'] === $category ? ' selected' : '' ?>><?= h($category) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="field">
+            <label for="adv-from">Published from</label>
+            <input class="input" id="adv-from" name="from" type="number" value="<?= h($advSearch['from']) ?>" placeholder="Year, e.g. 1980" min="1" max="9999" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="adv-to">Published to</label>
+            <input class="input" id="adv-to" name="to" type="number" value="<?= h($advSearch['to']) ?>" placeholder="Year, e.g. 2020" min="1" max="9999" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label for="adv-availability">Availability</label>
+            <select class="select" id="adv-availability" name="availability"><?= simpleOptions(ADVANCED_AVAILABILITY, $advSearch['availability']) ?></select>
+          </div>
+        </div>
+        <div class="form-grid form-grid--2">
+          <div class="field">
+            <label for="adv-shelf">Shelf location</label>
+            <input class="input" id="adv-shelf" name="shelf" type="text" value="<?= h($advSearch['shelf']) ?>" placeholder="e.g. C-04" maxlength="20">
+          </div>
+          <div class="field">
+            <label for="adv-sort">Sort by</label>
+            <select class="select" id="adv-sort" name="sort"><?= simpleOptions(ADVANCED_SORTS, $advSearch['sort']) ?></select>
+          </div>
+        </div>
+        <div class="actions actions--end">
+          <button class="btn btn--round" type="submit">Search</button>
+          <a class="btn btn--round btn--outline" href="admin-library.php#catalog">Reset</a>
+        </div>
+      </form>
+    </details>
 
     <form class="panel panel--lg form-stack" id="add-item-form" method="post" action="<?= h($formAction) ?>" enctype="multipart/form-data" hidden data-native-submit>
       <input type="hidden" name="action" value="add_book">
@@ -400,14 +493,14 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
 
     <div class="book-grid" id="catalog">
       <?php if (empty($books)): ?>
-        <p><?= catalogFiltersActive($search) ? 'No books match your search.' : 'No books in the catalog yet.' ?></p>
+        <p><?= ($advActive || catalogFiltersActive($search)) ? 'No books match your search.' : 'No books in the catalog yet.' ?></p>
       <?php endif; ?>
       <?php foreach ($books as $book): ?>
         <?php
           $bookId      = (int) $book['id'];
           $copiesLeft  = (int) $book['copies_available'];
           $typeLabel   = mediaTypeLabel($book['media_type']);
-          $pillClass   = mediaTypeBadgeClass($book['media_type']) === 'success' ? 'pill--green' : 'pill--blue';
+          $pillClass   = mediaTypePillClass($book['media_type']);
           $keywords    = array_filter(array_map('trim', explode(',', (string) ($book['key_word'] ?? ''))));
           $bookHistory = $loanHistoryByBook[$book['id']] ?? [];
           $meta        = [formatPublishedDate((string) $book['published_date'])];
@@ -576,6 +669,38 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
     <section id="tab-loan" role="tabpanel" data-tab-panel hidden>
       <?php if (empty($activeLoans)): ?>
         <p class="sub">Nothing is on loan right now.</p>
+      <?php else: ?>
+        <form class="panel stock-form" method="post" action="<?= h($formAction) ?>" data-native-submit>
+          <input type="hidden" name="action" value="extend_all_loans">
+          <input class="input" type="number" name="days" min="1" max="<?= EXTEND_MAX_DAYS ?>" placeholder="Days to extend all due dates (e.g. closure, typhoon)" aria-label="Days to extend all due dates" inputmode="numeric" required>
+          <button class="btn" type="submit" onclick="var d = parseInt(this.form.days.value, 10); return d > 0 &amp;&amp; confirm('Extend the due date of all <?= count($activeLoans) ?> active loan(s) by ' + d + ' day(s)? This cannot be undone in one click.');">Extend all due dates</button>
+        </form>
+        <div class="form-grid form-grid--2">
+          <form class="panel stock-form" method="post" action="<?= h($formAction) ?>" data-native-submit>
+            <input type="hidden" name="action" value="extend_loans">
+            <input type="hidden" name="scope" value="user">
+            <select class="select" name="target_id" aria-label="Borrower to extend" required>
+              <option value="">Extend for a borrower…</option>
+              <?php foreach ($extendTargets['users'] as $u): ?>
+                <option value="<?= (int) $u['id'] ?>"><?= h(($u['username'] ?? '') !== '' ? $u['username'] : $u['student_number']) ?> (#<?= h($u['student_number']) ?>) · <?= (int) $u['loans'] ?> loan<?= (int) $u['loans'] === 1 ? '' : 's' ?></option>
+              <?php endforeach; ?>
+            </select>
+            <input class="input" type="number" name="days" min="1" max="<?= EXTEND_MAX_DAYS ?>" placeholder="Days" aria-label="Days to extend" inputmode="numeric" required style="flex:0 0 120px;min-width:120px">
+            <button class="btn" type="submit" onclick="return this.form.target_id.value !== '' &amp;&amp; confirm('Extend all of this borrower\'s active loans by ' + this.form.days.value + ' day(s)?');">Extend</button>
+          </form>
+          <form class="panel stock-form" method="post" action="<?= h($formAction) ?>" data-native-submit>
+            <input type="hidden" name="action" value="extend_loans">
+            <input type="hidden" name="scope" value="item">
+            <select class="select" name="target_id" aria-label="Item to extend" required>
+              <option value="">Extend for an item…</option>
+              <?php foreach ($extendTargets['books'] as $b): ?>
+                <option value="<?= (int) $b['id'] ?>"><?= h($b['title']) ?> · <?= (int) $b['loans'] ?> loan<?= (int) $b['loans'] === 1 ? '' : 's' ?></option>
+              <?php endforeach; ?>
+            </select>
+            <input class="input" type="number" name="days" min="1" max="<?= EXTEND_MAX_DAYS ?>" placeholder="Days" aria-label="Days to extend" inputmode="numeric" required style="flex:0 0 120px;min-width:120px">
+            <button class="btn" type="submit" onclick="return this.form.target_id.value !== '' &amp;&amp; confirm('Extend all active loans of this item by ' + this.form.days.value + ' day(s)?');">Extend</button>
+          </form>
+        </div>
       <?php endif; ?>
       <div class="request-grid" id="loan-grid">
       <?php foreach ($activeLoans as $loan): $late = loanDaysLate((string) $loan['due_date']); ?>
@@ -586,6 +711,13 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
           <?php if ($late > 0): ?>
             <p class="request-card__line" style="color:#b42318;font-weight:600"><?= $late ?> day<?= $late === 1 ? '' : 's' ?> overdue — ₱<?= number_format($late * OVERDUE_FEE_PER_DAY, 2) ?></p>
           <?php endif; ?>
+          <form class="stock-form" method="post" action="<?= h($formAction) ?>" data-native-submit>
+            <input type="hidden" name="action" value="extend_loans">
+            <input type="hidden" name="scope" value="loan">
+            <input type="hidden" name="target_id" value="<?= (int) $loan['loan_id'] ?>">
+            <input class="input" type="number" name="days" min="1" max="<?= EXTEND_MAX_DAYS ?>" placeholder="Days" aria-label="Days to extend this loan" inputmode="numeric" required style="flex:0 0 100px;min-width:100px">
+            <button class="btn btn--outline btn--sm" type="submit">Extend this loan</button>
+          </form>
           <form method="post" action="<?= h($formAction) ?>" data-native-submit data-loan-form>
             <input type="hidden" name="action" value="confirm_return">
             <input type="hidden" name="loan_id" value="<?= (int) $loan['loan_id'] ?>">
@@ -611,7 +743,7 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
         <dt>Approved</dt><dd id="rc-approved"></dd>
         <dt>Due date</dt><dd id="rc-due"></dd>
       </dl>
-      <p class="receipt__foot">Approved by Admin #A-001. Please return on or before the due date.</p>
+      <p class="receipt__foot">Approved by Admin <?= htmlspecialchars($adminAcct['username'], ENT_QUOTES, 'UTF-8') ?>. Please return on or before the due date.</p>
     </div>
     <div class="receipt-actions">
       <button type="button" class="btn btn--outline" id="close-receipt">Close</button>
@@ -686,13 +818,13 @@ $maxPublished = date('Y-m-d', strtotime('-1 day'));
     // the browser's normal form submission is left alone.
     (function () {
       function onAddForm(e) {
-        return e.target && e.target.closest && e.target.closest('#add-item-form');
+        return e.target && e.target.closest && e.target.closest('#add-item-form, #advanced-search-form');
       }
       document.addEventListener('submit', function (e) {
         if (onAddForm(e)) e.stopImmediatePropagation();
       }, true);
       document.addEventListener('click', function (e) {
-        var btn = e.target && e.target.closest ? e.target.closest('#add-item-form button[type="submit"]') : null;
+        var btn = e.target && e.target.closest ? e.target.closest('#add-item-form button[type="submit"], #advanced-search-form button[type="submit"]') : null;
         if (btn) e.stopImmediatePropagation();
       }, true);
     })();

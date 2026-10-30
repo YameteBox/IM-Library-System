@@ -8,7 +8,7 @@ $old     = ['student' => '', 'username' => '', 'email' => '', 'phone' => ''];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $student  = trim($_POST['student'] ?? '');
-    $username = strtolower(trim($_POST['username'] ?? ''));
+    $username = trim($_POST['username'] ?? ''); // keep the letter case as typed
     $email    = trim($_POST['email'] ?? '');
     $phone    = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -37,6 +37,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($password !== $confirm) {
         $errors[] = 'Passwords do not match.';
+    }
+
+    if (!$errors) {
+        try {
+            // Usernames keep their case, but "Juan" and "juan" still count as the same name
+            $dup = $pdo->prepare('SELECT 1 FROM user_details WHERE LOWER(username) = LOWER(:un)');
+            $dup->execute([':un' => $username]);
+            if ($dup->fetchColumn()) {
+                $errors[] = 'That Student ID, username or email is already registered.';
+            }
+        } catch (PDOException $e) {
+            $errors[] = 'Server error. Please try again.';
+        }
     }
 
     if (!$errors) {
@@ -135,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
               <div class="field">
                 <label for="f-student">Student Number</label>
-                <input class="input" id="f-student" name="student" type="text" value="<?= htmlspecialchars($old['student']) ?>" placeholder="136452120529">
+                <input class="input" id="f-student" name="student" type="text" value="<?= htmlspecialchars($old['student']) ?>" placeholder="">
               </div>
               <div class="field">
                 <label for="f-username">Username</label>
@@ -147,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
               <div class="field">
                 <label for="f-phone">Phone number (optional)</label>
-                <input class="input" id="f-phone" name="phone" type="tel" value="<?= htmlspecialchars($old['phone']) ?>" placeholder="09171234567" autocomplete="tel">
+                <input class="input" id="f-phone" name="phone" type="tel" value="<?= htmlspecialchars($old['phone']) ?>" placeholder="" autocomplete="tel">
               </div>
               <div class="field">
                 <label for="f-password">Password</label>

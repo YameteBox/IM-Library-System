@@ -111,7 +111,7 @@ $pendingBookIds = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
         $bookId     = (int) $book['id'];
         $copiesLeft = (int) $book['copies_available'];
         $typeLabel  = mediaTypeLabel($book['media_type']);
-        $pillClass  = mediaTypeBadgeClass($book['media_type']) === 'success' ? 'pill--green' : 'pill--blue';
+        $pillClass  = mediaTypePillClass($book['media_type']);
         $keywords   = array_filter(array_map('trim', explode(',', (string) ($book['key_word'] ?? ''))));
         $isPending  = in_array($bookId, $pendingBookIds, true);
         $meta       = [formatPublishedDate((string) $book['published_date'])];

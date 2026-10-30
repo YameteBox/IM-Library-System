@@ -12,14 +12,21 @@ $adminId = (int) $_SESSION['admin_id'];
 
 $errors = [];
 $success = '';
-$profileSaved = false;
-$accountSaved = false;
 
 // CSRF protection
 if (empty($_SESSION['admin_profile_csrf'])) {
     $_SESSION['admin_profile_csrf'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['admin_profile_csrf'];
+
+// One-time message carried over from a successful save (post/redirect/get)
+if (!empty($_SESSION['admin_profile_flash'])) {
+    $success = (string) $_SESSION['admin_profile_flash'];
+    unset($_SESSION['admin_profile_flash']);
+}
+
+// Values to re-show in the forms if a save fails
+$posted = [];
 
 // Default values
 $admin = [
@@ -84,7 +91,6 @@ try {
         'SELECT
             a.id,
             a.admin_number,
-            a.password_hash,
             d.username,
             d.email,
             p.bio,
@@ -138,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $color2 = $_POST['color2'] ?? '#3B82F6';
                 $textColor = $_POST['color_text'] ?? '#FFFFFF';
                 $useGradient = ($_POST['color_mode'] ?? 'solid') === 'gradient';
+                $posted = ['bio' => $bio];
 
                 if (mb_strlen($bio) > 280) {
                     $errors[] = 'Bio must not exceed 280 characters.';
@@ -160,24 +167,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          WHERE id = :id'
                     );
 
-                    $stmt->execute([
-                        ':bio' => $bio,
-                        ':color' => $color,
-                        ':use_gradient' => $useGradient,
-                        ':color2' => $useGradient ? $color2 : null,
-                        ':text_color' => $textColor,
-                        ':id' => $adminId
-                    ]);
+                    // Bind the boolean as 'true'/'false': a plain PHP false is sent as ''
+                    // and PostgreSQL rejects that for a boolean column.
+                    $stmt->bindValue(':bio', $bio);
+                    $stmt->bindValue(':color', $color);
+                    $stmt->bindValue(':use_gradient', $useGradient ? 'true' : 'false');
+                    $stmt->bindValue(
+                        ':color2',
+                        $useGradient ? $color2 : null,
+                        $useGradient ? PDO::PARAM_STR : PDO::PARAM_NULL
+                    );
+                    $stmt->bindValue(':text_color', $textColor);
+                    $stmt->bindValue(':id', $adminId, PDO::PARAM_INT);
+                    $stmt->execute();
 
-                    $success = 'Profile customization saved successfully.';
-                    $profileSaved = true;
+                    $_SESSION['admin_profile_flash'] = 'Profile customization saved successfully.';
+                    header('Location: admin-profile.php');
+                    exit;
                 }
 
             } elseif ($action === 'save_account') {
                 $username = trim($_POST['username'] ?? '');
-                $currentPassword = $_POST['current'] ?? '';
-                $newPassword = $_POST['new'] ?? '';
-                $confirmPassword = $_POST['confirm'] ?? '';
+                $currentPassword = (string) ($_POST['current'] ?? '');
+                $newPassword = (string) ($_POST['new'] ?? '');
+                $confirmPassword = (string) ($_POST['confirm'] ?? '');
+                $posted = ['username' => $username];
 
                 if ($username === '' || mb_strlen($username) > 30) {
                     $errors[] = 'Username must contain 1–30 characters.';
@@ -185,16 +199,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = 'Username may contain letters, numbers, underscores, periods, and hyphens only.';
                 }
 
-                // An empty new password means the username is being changed only.
-                $changingPassword = ($newPassword !== ''
-                    || $confirmPassword !== ''
-                    || $currentPassword !== '');
+                $changingPassword = ($newPassword !== '' || $confirmPassword !== '');
 
                 if ($changingPassword) {
-                    if ($currentPassword === '') {
-                        $errors[] = 'Enter your current password to change your password.';
-                    }
-
                     if ($newPassword === '' || $confirmPassword === '') {
                         $errors[] = 'Enter and confirm your new password.';
                     } elseif ($newPassword !== $confirmPassword) {
@@ -209,64 +216,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$errors) {
                     $pdo->beginTransaction();
 
-                    // Lock and verify this admin's record before changing anything.
+                    // Lock this admin's row and read the stored hash + current username
                     $stmt = $pdo->prepare(
-                        'SELECT password_hash
-                         FROM admins
-                         WHERE id = :id
-                         FOR UPDATE'
+                        'SELECT a.password_hash, d.username
+                           FROM admins a
+                           JOIN admin_details d ON d.id = a.id
+                          WHERE a.id = :id
+                            FOR UPDATE OF a'
                     );
                     $stmt->execute([':id' => $adminId]);
-                    $passwordRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                    if (!$passwordRow) {
+                    if (!$row) {
                         throw new RuntimeException('Admin account no longer exists.');
                     }
 
-                    if ($changingPassword
-                        && !password_verify(
-                            $currentPassword,
-                            $passwordRow['password_hash']
-                        )) {
+                    // Changing the username or password needs the current password
+                    $usernameChanged = ($username !== (string) $row['username']);
+                    $needsPassword = $usernameChanged || $changingPassword;
+
+                    if ($needsPassword && $currentPassword === '') {
+                        $pdo->rollBack();
+                        $errors[] = 'Enter your current password to change your username or password.';
+                    } elseif ($needsPassword
+                        && !password_verify($currentPassword, (string) $row['password_hash'])) {
                         $pdo->rollBack();
                         $errors[] = 'Your current password is incorrect.';
                     } else {
-                        // Update username. The unique constraint protects against duplicates.
-                        $stmt = $pdo->prepare(
-                            'UPDATE admin_details
-                             SET username = :username
-                             WHERE id = :id'
-                        );
-                        $stmt->execute([
-                            ':username' => $username,
-                            ':id' => $adminId
-                        ]);
+                        if ($usernameChanged) {
+                            $stmt = $pdo->prepare(
+                                'UPDATE admin_details SET username = :username WHERE id = :id'
+                            );
+                            $stmt->execute([':username' => $username, ':id' => $adminId]);
+                        }
 
                         if ($changingPassword) {
-                            $newHash = password_hash(
-                                $newPassword,
-                                PASSWORD_DEFAULT
-                            );
-
                             $stmt = $pdo->prepare(
-                                'UPDATE admins
-                                 SET password_hash = :password_hash
-                                 WHERE id = :id'
+                                'UPDATE admins SET password_hash = :password_hash WHERE id = :id'
                             );
                             $stmt->execute([
-                                ':password_hash' => $newHash,
+                                ':password_hash' => password_hash($newPassword, PASSWORD_DEFAULT),
                                 ':id' => $adminId
                             ]);
                         }
 
                         $pdo->commit();
 
+                        if ($changingPassword) {
+                            session_regenerate_id(true); // new session id after a credential change
+                        }
                         $_SESSION['admin_name'] = $username;
-                        $success = 'Account settings saved successfully.';
-                        $accountSaved = true;
-
-                        // Clear submitted passwords on the next request.
-                        $_POST = [];
+                        $_SESSION['admin_profile_flash'] = 'Account settings saved successfully.';
+                        header('Location: admin-profile.php');
+                        exit;
                     }
                 }
 
@@ -302,7 +304,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'SELECT
                 a.id,
                 a.admin_number,
-                a.password_hash,
                 d.username,
                 d.email,
                 p.bio,
@@ -433,7 +434,7 @@ $avatarBackground = $useGradient
         <div class="field">
           <label for="bio">Bio</label>
           <input class="input" id="bio" name="bio" maxlength="280"
-            value="<?= profileEscape($admin['bio']) ?>">
+            value="<?= profileEscape($posted['bio'] ?? $admin['bio']) ?>">
         </div>
 
         <div class="choice-row">
@@ -484,17 +485,14 @@ $avatarBackground = $useGradient
           <label for="f-username">Username</label>
           <input class="input" id="f-username" name="username"
             type="text" maxlength="30" required autocomplete="username"
-            value="<?= profileEscape(
-                isset($_POST['username']) && !$accountSaved
-                    ? $_POST['username']
-                    : $admin['username']
-            ) ?>">
+            value="<?= profileEscape($posted['username'] ?? $admin['username']) ?>">
         </div>
 
         <div class="field">
           <label for="f-current">Current Password</label>
           <input class="input" id="f-current" name="current"
-            type="password" autocomplete="current-password">
+            type="password" autocomplete="current-password"
+            placeholder="Required to change your username or password.">
         </div>
 
         <div class="field">
@@ -509,7 +507,7 @@ $avatarBackground = $useGradient
             type="password" autocomplete="new-password" minlength="8">
         </div>
 
-        <p class="sub">Leave all password fields empty if you only want to change your username.</p>
+        <p class="sub">Leave the new password fields empty if you are not changing your password.</p>
 
         <div>
           <button class="btn btn--round" type="submit">Save Account Settings</button>

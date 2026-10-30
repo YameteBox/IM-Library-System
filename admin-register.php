@@ -1,5 +1,19 @@
 <?php
+session_start();
+
+// Admins only (same check as admin-library.php)
+if (empty($_SESSION['admin_id'])) {
+    header('Location: admin-login.php');
+    exit;
+}
+
 require 'db.php';
+require_once 'account_helpers.php';
+$adminAcct = adminAccount($pdo, (int) $_SESSION['admin_id']); // latest username from the database
+if (!$adminAcct) {
+    header('Location: admin-logout.php'); // session points at an admin that no longer exists
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -20,7 +34,7 @@ require 'db.php';
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">Library Management — Admin #A-001</h1>
+          <h1 class="brand__title">Library Management — Admin <?= htmlspecialchars($adminAcct['username'], ENT_QUOTES, 'UTF-8') ?></h1>
           <span class="role-badge">admin</span>
         </div>
       </div>

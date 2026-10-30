@@ -4,6 +4,7 @@ require 'db.php';
 require_once 'media_types.php';
 require_once 'search_helpers.php';
 require_once 'notifications_helpers.php';
+require_once 'account_helpers.php';
 
 // Must be logged in (login.php sets these session values)
 if (empty($_SESSION['user_id'])) {
@@ -11,8 +12,13 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 $userId        = (int) $_SESSION['user_id'];
-$studentNumber = $_SESSION['student_number'] ?? '';
-$username      = $_SESSION['username'] ?? $studentNumber;
+$account       = studentAccount($pdo, $userId); // latest username from the database
+if (!$account) {
+    header('Location: logout.php'); // session points at a user that no longer exists
+    exit;
+}
+$studentNumber = $account['student_number'];
+$username      = $account['username'];
 
 $isBanned = userIsBanned($pdo, $userId); // banned students can browse but not request to borrow
 
@@ -177,7 +183,7 @@ $watchedBookIds = $notifications['watched'];
 
       <section aria-labelledby="new-h" style="display:flex;flex-direction:column;gap:12px">
         <div class="carousel-head">
-          <h2 class="section-title" id="new-h">New books</h2>
+          <h2 class="section-title" id="new-h">Newly added</h2>
           <div class="carousel-arrows">
             <button class="icon-btn" type="button" id="prev-books" aria-label="Previous">‹</button>
             <button class="icon-btn" type="button" id="next-books" aria-label="Next">›</button>
@@ -202,7 +208,7 @@ $watchedBookIds = $notifications['watched'];
             $bookId     = (int) $book['id'];
             $copiesLeft = (int) $book['copies_available'];
             $typeLabel  = mediaTypeLabel($book['media_type']);
-            $pillClass  = mediaTypeBadgeClass($book['media_type']) === 'success' ? 'pill--green' : 'pill--blue';
+            $pillClass  = mediaTypePillClass($book['media_type']);
             $keywords   = array_filter(array_map('trim', explode(',', (string) ($book['key_word'] ?? ''))));
             $isPending  = in_array($bookId, $pendingBookIds, true);
             $meta       = [formatPublishedDate((string) $book['published_date'])];

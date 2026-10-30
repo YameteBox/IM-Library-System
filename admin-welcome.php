@@ -29,7 +29,7 @@ $adminNumber = (string) ($_SESSION['admin_number'] ?? '');
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">Library Management — Admin #<?= htmlspecialchars($adminNumber, ENT_QUOTES, 'UTF-8') ?></h1>
+          <h1 class="brand__title">Library Management — Admin <?= htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8') ?></h1>
           
         </div>
       </div>

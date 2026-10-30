@@ -3,6 +3,7 @@ session_start();
 require 'db.php';
 require_once 'search_helpers.php'; // h()
 require_once 'lists_helpers.php';
+require_once 'account_helpers.php';
 
 // Must be logged in (login.php sets these session values)
 if (empty($_SESSION['user_id'])) {
@@ -10,8 +11,13 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 $userId        = (int) $_SESSION['user_id'];
-$studentNumber = (string) ($_SESSION['student_number'] ?? '');
-$username      = (string) ($_SESSION['username'] ?? $studentNumber);
+$account       = studentAccount($pdo, $userId); // latest username from the database
+if (!$account) {
+    header('Location: logout.php'); // session points at a user that no longer exists
+    exit;
+}
+$studentNumber = $account['student_number'];
+$username      = $account['username'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string) ($_POST['action'] ?? '');

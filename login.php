@@ -73,11 +73,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
             <div class="field">
               <label for="f-student">Student Number</label>
-              <input class="input" id="f-student" name="student" type="text" value="<?= htmlspecialchars($student) ?>" placeholder="" autocomplete="username">
+              <input class="input" id="f-student" name="student" type="text" value="" placeholder="Insert student number...">
             </div>
             <div class="field">
               <label for="f-password">Password</label>
-              <input class="input" id="f-password" name="password" type="password" value="" placeholder="" autocomplete="current-password">
+              <input class="input" id="f-password" name="password" type="password" value="" placeholder="Insert password..." >
             </div>
             <button class="btn btn--block btn--round" type="submit">Log In</button>
           </form>

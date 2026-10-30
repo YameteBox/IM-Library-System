@@ -598,6 +598,13 @@ button { cursor: pointer; }
 
 .pill--grey { background: #6c757d; color: #fff; }
 
+/* Media type pills: one colour per media type */
+.pill--type-book { background: #1d4ed8; color: #fff; }
+.pill--type-audiovisual { background: #c2410c; color: #fff; }
+.pill--type-board-game { background: #15803d; color: #fff; }
+.pill--type-digital-media { background: #7e22ce; color: #fff; }
+.pill--type-unknown { background: #6b7280; color: #fff; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .chip {
@@ -1230,7 +1237,9 @@ body.dark .switch { background: var(--line-strong); }
 
 body.dark .switch[aria-checked="true"] { background: var(--blue); }
 
-body.dark a { color: #8db4f2; }
+body.dark a { color: var(--ink); }
+
+body.dark .nav__link { color: #fff; }
 
 body.dark .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 
@@ -1264,7 +1273,7 @@ body.dark .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 
   .brand__title { font-size: 17px; line-height: 21px; }
 
-  .nav__link { padding: 10px 14px; font-size: 14px; }
+  .nav__link { padding: 10px 14px; font-size: 14px;}
 
   .hero { padding: 28px 20px; }
 

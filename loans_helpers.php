@@ -15,6 +15,9 @@ require_once __DIR__ . '/search_helpers.php'; // h(), formatPublishedDate(), use
 if (!defined('LOAN_PERIOD_DAYS')) {
     define('LOAN_PERIOD_DAYS', 7);
 }
+if (!defined('EXTEND_MAX_DAYS')) {
+    define('EXTEND_MAX_DAYS', 60); // longest single extension an admin can apply
+}
 if (!defined('OVERDUE_FEE_PER_DAY')) {
     define('OVERDUE_FEE_PER_DAY', 5); // pesos, same rate as profile.php
 }
@@ -175,6 +178,112 @@ function returnLoan(PDO $pdo, int $loanId): array
         error_log('returnLoan: ' . $e->getMessage());
         return loanResult(false, 'Something went wrong marking that loan as returned. Please try again.');
     }
+}
+
+/**
+ * Push the due date of every active loan (approved, not yet returned) back by $days days.
+ * For library closures, typhoons, etc. Overdue loans are moved too, so the late fee shrinks
+ * accordingly. Returns ['ok', 'message', 'receipt'].
+ */
+function extendAllLoans(PDO $pdo, int $days): array
+{
+    if ($days < 1 || $days > EXTEND_MAX_DAYS) {
+        return loanResult(false, 'Enter a number of days between 1 and ' . EXTEND_MAX_DAYS . '.');
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            "UPDATE borrowed_books
+                SET due_date = due_date + (CAST(:n AS integer) * INTERVAL '1 day')
+              WHERE status = 'approved' AND returned_at IS NULL AND due_date IS NOT NULL"
+        );
+        $stmt->bindValue(':n', $days, PDO::PARAM_INT);
+        $stmt->execute();
+        $count = $stmt->rowCount();
+
+        if ($count === 0) {
+            return loanResult(false, 'Nothing is on loan right now, so no due dates were changed.');
+        }
+        return loanResult(true, 'Extended ' . $count . ' loan' . ($count === 1 ? '' : 's')
+            . ' by ' . $days . ' day' . ($days === 1 ? '' : 's') . '.');
+    } catch (PDOException $e) {
+        error_log('extendAllLoans: ' . $e->getMessage());
+        return loanResult(false, 'Something went wrong extending the due dates. Please try again.');
+    }
+}
+
+/**
+ * Push back the due date of active (approved, not yet returned) loans.
+ *
+ * @param string $scope    'loan' = one loan, 'user' = all of one borrower's loans, 'item' = all loans of one book
+ * @param int    $targetId borrowed_books.id, users.id or books.id, depending on $scope
+ * @param int    $days     1..EXTEND_MAX_DAYS
+ * @return array  ['ok', 'message', 'receipt'] like extendAllLoans()
+ */
+function extendActiveLoans(PDO $pdo, string $scope, int $targetId, int $days): array
+{
+    // Whitelisted column names: $scope is never put into the SQL directly
+    $columns = ['loan' => 'bb.id', 'user' => 'bb.user_id', 'item' => 'bb.book_id'];
+    if (!isset($columns[$scope]) || $targetId <= 0) {
+        return loanResult(false, 'Choose what to extend.');
+    }
+    if ($days < 1 || $days > EXTEND_MAX_DAYS) {
+        return loanResult(false, 'Enter a number of days between 1 and ' . EXTEND_MAX_DAYS . '.');
+    }
+    $col = $columns[$scope];
+
+    try {
+        $stmt = $pdo->prepare(
+            "UPDATE borrowed_books AS bb
+                SET due_date = bb.due_date + (CAST(:days AS integer) * INTERVAL '1 day')
+              WHERE $col = :id
+                AND bb.status = 'approved'
+                AND bb.returned_at IS NULL
+                AND bb.due_date IS NOT NULL"
+        );
+        $stmt->execute([':days' => $days, ':id' => $targetId]);
+        $count = $stmt->rowCount();
+    } catch (PDOException $e) {
+        error_log('extendActiveLoans: ' . $e->getMessage());
+        return loanResult(false, 'Something went wrong extending the loan(s). Please try again.');
+    }
+
+    if ($count === 0) {
+        return loanResult(false, 'No active loans matched, so nothing was extended.');
+    }
+
+    $what = $scope === 'loan' ? 'the loan' : ($scope === 'user' ? 'that borrower’s loan(s)' : 'that item’s loan(s)');
+    return loanResult(true, 'Extended ' . $what . ' by ' . $days . ' day' . ($days === 1 ? '' : 's')
+        . ' (' . $count . ' loan' . ($count === 1 ? '' : 's') . ' updated).');
+}
+
+/**
+ * Borrowers and items that currently have an active loan, for the "extend for…" dropdowns.
+ *
+ * @return array{users: list<array>, books: list<array>}
+ */
+function extendTargetOptions(PDO $pdo): array
+{
+    $users = $pdo->query(
+        "SELECT u.id, CAST(u.student_number AS text) AS student_number, d.username, COUNT(*) AS loans
+           FROM borrowed_books bb
+           JOIN users u ON u.id = bb.user_id
+           LEFT JOIN user_details d ON d.id = u.id
+          WHERE bb.status = 'approved' AND bb.returned_at IS NULL
+          GROUP BY u.id, u.student_number, d.username
+          ORDER BY d.username, u.student_number"
+    )->fetchAll(PDO::FETCH_ASSOC);
+
+    $books = $pdo->query(
+        "SELECT bk.id, bk.title, COUNT(*) AS loans
+           FROM borrowed_books bb
+           JOIN books bk ON bk.id = bb.book_id
+          WHERE bb.status = 'approved' AND bb.returned_at IS NULL
+          GROUP BY bk.id, bk.title
+          ORDER BY bk.title"
+    )->fetchAll(PDO::FETCH_ASSOC);
+
+    return ['users' => $users, 'books' => $books];
 }
 
 // ---------------------------------------------------------------------------

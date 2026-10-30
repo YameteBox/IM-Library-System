@@ -10,6 +10,12 @@ if (empty($_SESSION['admin_id'])) {
 require 'db.php';
 require_once 'search_helpers.php'; // h(), formatPublishedDate()
 require_once 'events_helpers.php';
+require_once 'account_helpers.php';
+$adminAcct = adminAccount($pdo, (int) $_SESSION['admin_id']); // latest username from the database
+if (!$adminAcct) {
+    header('Location: admin-logout.php'); // session points at an admin that no longer exists
+    exit;
+}
 ensureEventsTable($pdo);
 
 $month = calendarMonth($_GET['month'] ?? $_POST['month'] ?? null);
@@ -122,7 +128,7 @@ $formTime = $editing && $editing['event_time'] ? substr((string) $editing['event
       <div class="brand">
         <img class="brand__logo" src="assets/logo.webp" alt="Manila Science High School seal" width="70" height="70">
         <div class="brand__text">
-          <h1 class="brand__title">Calendar events — Admin #A-001</h1>
+          <h1 class="brand__title">Calendar events — Admin <?= htmlspecialchars($adminAcct['username'], ENT_QUOTES, 'UTF-8') ?></h1>
           <span class="role-badge">admin</span>
         </div>
       </div>

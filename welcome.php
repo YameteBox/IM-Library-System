@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'db.php';
+require_once 'account_helpers.php';
 
 // Must be logged in; logout.php destroys this session
 if (empty($_SESSION['user_id'])) {
@@ -8,7 +9,12 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 $userId   = (int) $_SESSION['user_id'];
-$username = (string) ($_SESSION['username'] ?? $_SESSION['student_number'] ?? '');
+$account  = studentAccount($pdo, $userId); // latest username from the database
+if (!$account) {
+    header('Location: logout.php'); // session points at a user that no longer exists
+    exit;
+}
+$username = $account['username'];
 
 // ---------------------------------------------------------------------------
 // OTP verification shell
